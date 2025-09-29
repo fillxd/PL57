@@ -1,0 +1,1569 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Plan</title>
+  
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+  <style>
+    :root{
+      --bg:#0f1220;
+      --card:#171b2e;
+      --muted:#2a3150;
+      --acc:#6ea8fe;
+      --acc-2:#a78bfa;
+      --text:#e6eaf8;
+      --sub:#a9b1d6;
+      --good:#10b981;
+      --bad:#ef4444;
+      --warn:#f59e0b;
+      --radius:16px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+      background: radial-gradient(1200px 600px at 10% -10%, #1b2040 0%, transparent 60%),
+                  radial-gradient(1000px 700px at 110% 10%, #16213a 0%, transparent 60%),
+                  var(--bg);
+      color:var(--text);
+    }
+    .wrap{max-width:1200px; margin:24px auto; padding:0 16px}
+    header{
+      display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px;
+    }
+    .title{font-weight:800; font-size:22px; letter-spacing:.3px}
+    .toolbar{display:flex; gap:8px; flex-wrap:wrap}
+    button, select, input[type="text"], input[type="date"], input[type="time"]{
+      background:var(--card); color:var(--text); border:1px solid var(--muted);
+      padding:10px 12px; border-radius:12px; outline:none; font-weight:600;
+    }
+    button{cursor:pointer}
+    button:hover{border-color:var(--acc)}
+    .primary{background:linear-gradient(90deg, var(--acc), var(--acc-2)); border:none; color:#0b1020}
+    .ghost{background:transparent}
+    .muted{opacity:.85}
+    .warning{background:rgba(245,158,11,.15); border:1px solid rgba(245,158,11,.4); color:#fbbf24}
+
+    /* GRID */
+    .grid-outer{
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
+      border:1px solid var(--muted);
+      border-radius:var(--radius);
+      overflow:hidden; position:relative;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    .grid-head, .grid{display:grid; grid-template-columns: 110px repeat(5, 1fr);}    
+    .grid-head div{
+      padding:12px; background:rgba(255,255,255,.04); border-right:1px solid var(--muted);
+      font-size:13px; letter-spacing:.3px; text-transform:uppercase; color:var(--sub);
+    }
+    .grid-head div:first-child{background:transparent}
+    .grid{border-top:1px solid var(--muted);}    
+    .row{display:contents}
+    .period{
+      padding:10px 12px; border-right:1px solid var(--muted); border-bottom:1px solid var(--muted); color:var(--sub); font-weight:700; text-align:center;
+      background:rgba(255,255,255,.02);
+    }
+    .cell{
+      position:relative; border-right:1px solid var(--muted); border-bottom:1px solid var(--muted);
+      min-height:86px; padding:10px; cursor:pointer;
+    }
+    .cell:hover{background:rgba(110,168,254,.06)}
+    .empty{font-size:12px; color:var(--sub); opacity:.7}
+
+    .lesson{display:flex; flex-direction:column; gap:4px; background:rgba(255,255,255,.04); border:1px solid var(--muted); padding:8px; border-radius:10px; margin-bottom:6px}
+    .lesson .name{font-weight:800}
+    .lesson .meta{font-size:12px; color:var(--sub)}
+    .lesson .tags{display:flex; gap:6px; flex-wrap:wrap}
+    .tag{display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:999px; font-size:12px; font-weight:700; background:rgba(110,168,254,.18); color:var(--acc); border:1px solid rgba(110,168,254,.35)}
+    .chip{display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:999px; font-size:12px; background:rgba(255,255,255,.06); border:1px solid var(--muted); color:var(--sub)}
+
+    /* Nieobecności */
+    .lesson.absent{background:rgba(239,68,68,.15); border-color:rgba(239,68,68,.4)}
+    .lesson.substitute{background:rgba(245,158,11,.15); border-color:rgba(245,158,11,.4)}
+    .lesson.cancelled{background:rgba(107,114,128,.15); border-color:rgba(107,114,128,.4); opacity:.7}
+    .lesson.cancelled .name{text-decoration:line-through}
+    .lesson.class-absent{background:rgba(139,69,19,.15); border-color:rgba(139,69,19,.4)}
+
+    .tag.absent{background:rgba(239,68,68,.25); color:#fca5a5; border-color:rgba(239,68,68,.5)}
+    .tag.substitute{background:rgba(245,158,11,.25); color:#fbbf24; border-color:rgba(245,158,11,.5)}
+    .tag.cancelled{background:rgba(107,114,128,.25); color:#9ca3af; border-color:rgba(107,114,128,.5)}
+    .tag.class-absent{background:rgba(139,69,19,.25); color:#d2691e; border-color:rgba(139,69,19,.5)}
+
+    .panel{background:var(--card); border:1px solid var(--muted); border-radius:var(--radius); padding:14px; margin:14px 0;}
+    .panel h3{margin:0 0 8px 0; font-size:14px; color:var(--sub); text-transform:uppercase; letter-spacing:.3px}
+    .row-flex{display:flex; gap:10px; flex-wrap:wrap}
+    .row-flex > *{flex:1 1 180px}
+
+    dialog{border:none; padding:0; border-radius:18px; overflow:hidden; width:min(560px, 96vw); background:var(--card); color:var(--text); box-shadow:0 25px 70px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04);} 
+    .dlg-h{display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--muted)}
+    .dlg-b{padding:16px; display:flex; flex-direction:column; gap:10px}
+    .dlg-f{display:flex; gap:8px; justify-content:flex-end; padding:14px 16px; border-top:1px solid var(--muted)}
+    label{display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--sub)}
+    input[type="text"], input[type="date"], input[type="time"], select{background:#0f1326; border:1px solid var(--muted); border-radius:12px; padding:10px 12px; color:var(--text)}
+    .two{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+    .three{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px}
+    .four{display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:10px}
+    .danger{background:rgba(239,68,68,.15); border:1px solid rgba(239,68,68,.4); color:#fecaca}
+    .success{background:rgba(16,185,129,.15); border:1px solid rgba(16,185,129,.4); color:#bbf7d0}
+    .hint{font-size:12px; color:var(--sub)}
+    .kbd{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px; background:rgba(255,255,255,.05); padding:2px 6px; border-radius:6px; border:1px solid var(--muted)}
+
+    .dict-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px}
+    .dict-card{background:rgba(255,255,255,.04); border:1px solid var(--muted); padding:10px; border-radius:12px}
+    .dict-card h4{margin:0 0 8px 0; font-size:13px; color:var(--sub); text-transform:uppercase}
+
+    .pill{display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; font-size:12px; background:rgba(255,255,255,.06); border:1px solid var(--muted); margin:4px 6px 0 0}
+    .pill button{border:none; background:transparent; color:#fca5a5; cursor:pointer; padding:0 4px}
+
+    #dict-panel, #absence-panel{display:none;}
+
+    .absence-list{max-height:300px; overflow-y:auto; border:1px solid var(--muted); border-radius:12px; padding:10px; margin-top:10px}
+    .absence-item{display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid var(--muted); margin-bottom:8px}
+    .absence-item:last-child{border-bottom:none; margin-bottom:0}
+    .absence-info{flex:1}
+    .absence-actions{display:flex; gap:6px}
+
+    .tabs{display:flex; border-bottom:1px solid var(--muted); margin-bottom:16px}
+    .tab{padding:10px 16px; cursor:pointer; border-bottom:2px solid transparent; color:var(--sub)}
+    .tab.active{color:var(--text); border-bottom-color:var(--acc)}
+    .tab:hover{color:var(--text)}
+
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+
+    .plan-type-selector{display:flex; gap:8px; margin-bottom:16px}
+    .plan-type-btn{padding:8px 16px; border:1px solid var(--muted); background:transparent; color:var(--sub); border-radius:12px; cursor:pointer}
+    .plan-type-btn.active{background:var(--acc); color:#0b1020; border-color:var(--acc)}
+
+    .week-navigation{display:flex; align-items:center; gap:12px; margin-bottom:16px}
+    .week-info{font-weight:600; color:var(--text)}
+
+    .substitution-info{font-size:11px; color:var(--warn); font-style:italic; margin-top:2px}
+
+    @media (max-width: 980px){
+      .grid-head, .grid{grid-template-columns: 80px repeat(5, 1fr)}
+      .period{padding:8px 0}
+      .cell{min-height:80px; padding:8px}
+      .dict-grid{grid-template-columns:1fr 1fr}
+      .three{grid-template-columns:1fr}
+      .four{grid-template-columns:1fr 1fr}
+    }
+    @media (max-width: 640px){
+      .dict-grid{grid-template-columns:1fr}
+      .two{grid-template-columns:1fr}
+      .four{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="title"> Plan </div>
+      <div class="toolbar">
+        <button class="ghost" id="btn-dict" title="Zarządzanie słownikami">Dodaj</button>
+        <button class="warning" id="btn-absence" title="Zarządzanie nieobecnościami">Nieobecności</button>
+      </div>
+    </header>
+
+    <div class="panel" id="mode-panel">
+      <h3>Wybierz widok</h3>
+      
+      <!-- Wybór typu planu -->
+      <div class="plan-type-selector">
+        <button class="plan-type-btn active" id="plan-fixed">Plan stały</button>
+        <button class="plan-type-btn" id="plan-dynamic">Plan ruchomy</button>
+      </div>
+
+      <!-- Nawigacja tygodniowa (tylko dla planu ruchomego) -->
+      <div class="week-navigation" id="week-nav" style="display:none;">
+        <button id="prev-week" class="ghost">‹ Poprzedni</button>
+        <div class="week-info" id="week-info"></div>
+        <button id="next-week" class="ghost">Następny ›</button>
+      </div>
+
+      <div class="row-flex">
+        <select id="mode">
+          <option value="class">Plan klasy</option>
+          <option value="teacher">Plan nauczyciela</option>
+          <option value="room">Plan sali</option>
+        </select>
+        <select id="entity"></select>
+        <button id="btn-open" class="primary">Pokaż plan</button>
+      </div>
+      <div class="legend" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px">
+        <div class="chip">Kliknij komórkę aby dodać lekcję</div>
+        <div class="chip">Kliknij kartę lekcji aby edytować</div>
+        <div class="chip">PN–PT, lekcje 0–9</div>
+      </div>
+    </div>
+
+    <div class="panel" id="dict-panel">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3 style="margin:0;">Zarządzanie danymi</h3>
+        <button class="ghost" id="btn-back">Powrót do planu</button>
+      </div>
+      <div class="dict-grid">
+        <div class="dict-card">
+          <h4>Klasy</h4>
+          <div class="row-flex"><input id="newClass" type="text" placeholder="np. 5B"/><button id="addClass">Dodaj</button></div>
+          <div id="pill-classes"></div>
+        </div>
+        <div class="dict-card">
+          <h4>Nauczyciele</h4>
+          <div class="row-flex"><input id="newTeacher" type="text" placeholder="Imię i nazwisko"/><button id="addTeacher">Dodaj</button></div>
+          <div id="pill-teachers"></div>
+        </div>
+        <div class="dict-card">
+          <h4>Sale</h4>
+          <div class="row-flex"><input id="newRoom" type="text" placeholder="np. 101"/><button id="addRoom">Dodaj</button></div>
+          <div id="pill-rooms"></div>
+        </div>
+        <div class="dict-card">
+          <h4>Przedmioty</h4>
+          <div class="row-flex"><input id="newSubject" type="text" placeholder="np. Matematyka"/><button id="addSubject">Dodaj</button></div>
+          <div id="pill-subjects"></div>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:10px">Usuwanie pozycji słownika nie kasuje istniejących lekcji. Na razie brak edycji nazw w miejscu.</div>
+    </div>
+
+    <div class="panel" id="absence-panel">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3 style="margin:0;">Zarządzanie nieobecnościami</h3>
+        <button class="ghost" id="btn-back-absence">Powrót do planu</button>
+      </div>
+      
+      <div class="tabs">
+        <div class="tab active" data-tab="teacher-absence">Nieobecności nauczycieli</div>
+        <div class="tab" data-tab="class-absence">Nieobecności klas</div>
+        <div class="tab" data-tab="substitutions">Zastępstwa</div>
+      </div>
+
+      <div class="tab-content active" id="teacher-absence">
+        <div class="row-flex">
+          <label>Data<input id="absence-date-selector" type="date"/></label>
+          <button id="set-absence-date" class="primary">Ustaw datę</button>
+        </div>
+        <div id="current-absence-date" class="hint" style="margin:10px 0;"></div>
+        
+        <div class="four">
+          <label>Nauczyciel<select id="absent-teacher"></select></label>
+          <label>Od lekcji<select id="absent-from-period"></select></label>
+          <label>Do lekcji<select id="absent-to-period"></select></label>
+          <label>Powód<input id="absent-reason" type="text" placeholder="np. choroba"/></label>
+        </div>
+        <button id="add-teacher-absence" class="primary" style="margin-top:10px;">Dodaj nieobecność</button>
+        <div class="absence-list" id="teacher-absence-list"></div>
+      </div>
+
+      <div class="tab-content" id="class-absence">
+        <div class="row-flex">
+          <label>Data<input id="class-absence-date-selector" type="date"/></label>
+          <button id="set-class-absence-date" class="primary">Ustaw datę</button>
+        </div>
+        <div id="current-class-absence-date" class="hint" style="margin:10px 0;"></div>
+        
+        <div class="four">
+          <label>Klasa<select id="absent-class"></select></label>
+          <label>Od lekcji<select id="absent-class-from-period"></select></label>
+          <label>Do lekcji<select id="absent-class-to-period"></select></label>
+          <label>Powód<input id="absent-class-reason" type="text" placeholder="np. wycieczka"/></label>
+        </div>
+        <button id="add-class-absence" class="primary" style="margin-top:10px;">Dodaj nieobecność</button>
+        <div class="absence-list" id="class-absence-list"></div>
+      </div>
+
+      <div class="tab-content" id="substitutions">
+        <div class="row-flex">
+          <label>Data zastępstw<input id="substitution-date-selector" type="date"/></label>
+          <button id="set-substitution-date" class="primary">Ustaw datę</button>
+        </div>
+        <div id="current-substitution-date" class="hint" style="margin:10px 0;"></div>
+        
+        <div class="hint" style="margin-bottom:16px">
+          Zastępstwa są automatycznie tworzone przy dodawaniu nieobecności nauczyciela. 
+          Tutaj możesz zarządzać istniejącymi zastępstwami dla wybranej daty.
+        </div>
+        <div class="absence-list" id="substitutions-list"></div>
+      </div>
+    </div>
+
+    <div class="grid-outer" id="timetable-grid">
+      <div class="grid-head">
+        <div></div>
+        <div>Poniedziałek</div>
+        <div>Wtorek</div>
+        <div>Środa</div>
+        <div>Czwartek</div>
+        <div>Piątek</div>
+      </div>
+      <div class="grid" id="grid"></div>
+    </div>
+  </div>
+
+  <!-- Dialog dodawania/edycji lekcji (obsługuje grupy) -->
+  <dialog id="lessonDlg">
+    <form method="dialog" id="lessonForm">
+      <div class="dlg-h">
+        <div id="dlgTitle">Lekcja</div>
+        <button value="cancel" class="ghost" formnovalidate>&times;</button>
+      </div>
+      <div class="dlg-b">
+        <div class="two">
+          <label>Dzień<select id="fDay"></select></label>
+          <label>Lekcja nr<select id="fPeriod"></select></label>
+        </div>
+        <div class="two">
+          <label>Przedmiot<select id="fSubject"></select></label>
+          <label>Nauczyciel<select id="fTeacher"></select></label>
+        </div>
+        <div class="two">
+          <label>Klasa<select id="fClass"></select></label>
+          <label>Grupa<input id="fGroup" type="text" placeholder="np. 5B1"/></label>
+        </div>
+        <div>
+          <label>Sala<select id="fRoom"></select></label>
+        </div>
+        <div class="hint">Kliknięcie istniejącej karty lekcji otwiera edycję.</div>
+      </div>
+      <div class="dlg-f">
+        <button class="danger" id="btnDelete" type="button">Usuń</button>
+        <div style="flex:1"></div>
+        <button value="cancel" class="ghost">Anuluj</button>
+        <button value="save" class="success">Zapisz</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialog zarządzania zastępstwem -->
+  <dialog id="substituteDlg">
+    <form method="dialog" id="substituteForm">
+      <div class="dlg-h">
+        <div id="substituteDlgTitle">Zarządzanie zastępstwem</div>
+        <button value="cancel" class="ghost" formnovalidate>&times;</button>
+      </div>
+      <div class="dlg-b">
+        <div id="substitute-lesson-info" style="background:rgba(255,255,255,.04); padding:12px; border-radius:12px; margin-bottom:16px;">
+          <div style="font-weight:700; margin-bottom:8px;">Lekcja do zastąpienia:</div>
+          <div id="original-lesson-details"></div>
+        </div>
+        
+        <div class="three">
+          <label>Akcja
+            <select id="substitute-action">
+              <option value="substitute">Zastępstwo</option>
+              <option value="cancel">Odwołaj lekcję</option>
+              <option value="subject-change">Zmiana przedmiotu</option>
+            </select>
+          </label>
+          <label>Zastępca<select id="substitute-teacher"></select></label>
+          <label>Nowy przedmiot<select id="substitute-subject"></select></label>
+        </div>
+        
+        <div class="two">
+          <label>Nowa sala<select id="substitute-room"></select></label>
+          <label>Uwagi<input id="substitute-notes" type="text" placeholder="Dodatkowe informacje"/></label>
+        </div>
+        
+        <div class="hint">
+          <strong>Zastępstwo:</strong> Inny nauczyciel prowadzi tę samą lekcję<br>
+          <strong>Odwołanie:</strong> Lekcja nie odbędzie się<br>
+          <strong>Zmiana przedmiotu:</strong> Zastępca prowadzi inny przedmiot
+        </div>
+      </div>
+      <div class="dlg-f">
+        <button value="cancel" class="ghost">Anuluj</button>
+        <button value="save" class="success">Zapisz</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+  // ---------- Stałe ----------
+  const DAYS = ["PN","WT","ŚR","CZ","PT"];
+  const PERIODS = Array.from({length: 10}, (_,i)=>i); // 0..9
+
+
+  const el = id => document.getElementById(id);
+  const $ = sel => document.querySelector(sel);
+
+  // ---------- Dane słownikowe (możesz dodawać z panelu) ----------
+  const dict = {
+    classes: [],
+    teachers: [],
+    rooms: [],
+    subjects: []
+  };
+
+  // ---------- Magazyn ----------
+// ---------- Magazyn ----------
+const store = {
+  async load(){
+    try{
+      // Firebase initialization
+      const firebaseConfig = {
+        apiKey: "AIzaSyBU5TsxSF_IsPhZb-fPqUaM_Lbcyn75-QU",
+        authDomain: "plan57.firebaseapp.com",
+        databaseURL: "https://plan57-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "plan57",
+        storageBucket: "plan57.firebasestorage.app",
+        messagingSenderId: "96724943053",
+        appId: "1:96724943053:web:cf607d1d0cf539953da984"
+      };
+      
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      
+      const database = firebase.database();
+      const snapshot = await database.ref('timetableData').once('value');
+      const data = snapshot.val();
+      
+      if(!data) return {lessons: [], dict, absences: [], substitutions: []};
+      
+      // zapewnij struktury
+      if(!data.dict) data.dict = {classes:[], teachers:[], rooms:[], subjects:[]};
+      if(!data.absences) data.absences = [];
+      if(!data.substitutions) data.substitutions = [];
+      
+      return {
+        lessons: Array.isArray(data.lessons)? data.lessons : [], 
+        dict: data.dict,
+        absences: data.absences,
+        substitutions: data.substitutions
+      };
+    }catch(e){ 
+      console.error('Błąd Firebase:', e);
+      return {lessons: [], dict, absences: [], substitutions: []}; 
+    }
+  },
+  
+  async save(payload){ 
+    try {
+      const database = firebase.database();
+      await database.ref('timetableData').set(payload);
+    } catch(error) {
+      console.error('Błąd zapisu do Firebase:', error);
+    }
+  }
+};
+  let state = {
+    lessons: [], // {id, day, period, subject, teacher, class, room, group?}
+    absences: [], // {id, type: 'teacher'|'class', entity, date, reason, fromPeriod?, toPeriod?}
+    substitutions: [], // {id, lessonId, type: 'substitute'|'cancel'|'subject-change', substituteTeacher?, substituteSubject?, substituteRoom?, notes?, date}
+    mode: 'class', // 'class' | 'teacher' | 'room'
+    entity: null,  // nazwa klasy, nauczyciela lub sali
+    editingId: null,
+    planType: 'fixed', // 'fixed' | 'dynamic'
+    currentWeek: getWeekStart(new Date()), // początek bieżącego tygodnia
+    currentAbsenceDate: getTodayString(),
+    currentClassAbsenceDate: getTodayString(),
+    currentSubstitutionDate: getTodayString()
+  };
+
+  // ---------- Funkcje pomocnicze dla dat ----------
+  function getTodayString() {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  function getWeekStart(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Poniedziałek jako początek tygodnia
+    return new Date(d.setDate(diff)).toISOString().split('T')[0];
+  }
+
+  function addWeeks(dateStr, weeks) {
+    const date = new Date(dateStr);
+    date.setDate(date.getDate() + (weeks * 7));
+    return date.toISOString().split('T')[0];
+  }
+
+  function getWeekDates(weekStart) {
+    const dates = [];
+    const start = new Date(weekStart);
+    for(let i = 0; i < 5; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      dates.push(date.toISOString().split('T')[0]);
+    }
+    return dates;
+  }
+
+  function formatWeekRange(weekStart) {
+    const start = new Date(weekStart);
+    const end = new Date(weekStart);
+    end.setDate(start.getDate() + 4);
+    
+    const formatDate = (date) => {
+      return date.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+    
+    return `${formatDate(start)} - ${formatDate(end)}`;
+  }
+
+  function isInSchoolYear(date) {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    
+    // Rok szkolny 2025/2026: od 1.09.2025 do 30.06.2026
+    if (year === 2025 && month >= 9) return true;
+    if (year === 2026 && month <= 6) return true;
+    return false;
+  }
+
+  function cleanupOldAbsences() {
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    const cutoffDate = twoDaysAgo.toISOString().split('T')[0];
+    
+    const initialCount = state.absences.length;
+    state.absences = state.absences.filter(absence => absence.date >= cutoffDate);
+    
+    if (state.absences.length < initialCount) {
+      persist();
+    }
+  }
+
+  // ---------- Inicjalizacja ----------
+// ---------- Inicjalizacja ----------
+async function init(){
+  const saved = await store.load();
+  state.lessons = saved.lessons;
+  state.absences = saved.absences || [];
+  state.substitutions = saved.substitutions || [];
+  Object.assign(dict, saved.dict);
+  
+  // ... reszta funkcji init bez zmian
+    
+    // Wyczyść stare nieobecności
+    cleanupOldAbsences();
+    
+    setupTopBar();
+    setupDictPanel();
+    setupAbsencePanel();
+    setupPlanTypeSelector();
+    setupWeekNavigation();
+    renderGrid();
+    
+    // Obsługa przełączania między widokami
+    el('btn-dict').onclick = () => {
+      el('mode-panel').style.display = 'none';
+      el('timetable-grid').style.display = 'none';
+      el('dict-panel').style.display = 'block';
+      el('absence-panel').style.display = 'none';
+    };
+    
+    el('btn-absence').onclick = () => {
+      el('mode-panel').style.display = 'none';
+      el('timetable-grid').style.display = 'none';
+      el('dict-panel').style.display = 'none';
+      el('absence-panel').style.display = 'block';
+      renderAbsenceLists();
+    };
+    
+    el('btn-back').onclick = () => {
+      el('mode-panel').style.display = 'block';
+      el('timetable-grid').style.display = 'block';
+      el('dict-panel').style.display = 'none';
+      el('absence-panel').style.display = 'none';
+    };
+
+    el('btn-back-absence').onclick = () => {
+      el('mode-panel').style.display = 'block';
+      el('timetable-grid').style.display = 'block';
+      el('dict-panel').style.display = 'none';
+      el('absence-panel').style.display = 'none';
+    };
+  }
+
+  function setupPlanTypeSelector() {
+    el('plan-fixed').onclick = () => {
+      state.planType = 'fixed';
+      updatePlanTypeButtons();
+      el('week-nav').style.display = 'none';
+      renderGrid();
+    };
+    
+    el('plan-dynamic').onclick = () => {
+      state.planType = 'dynamic';
+      updatePlanTypeButtons();
+      el('week-nav').style.display = 'flex';
+      updateWeekInfo();
+      renderGrid();
+    };
+    
+    updatePlanTypeButtons();
+  }
+
+  function updatePlanTypeButtons() {
+    el('plan-fixed').classList.toggle('active', state.planType === 'fixed');
+    el('plan-dynamic').classList.toggle('active', state.planType === 'dynamic');
+  }
+
+  function setupWeekNavigation() {
+    el('prev-week').onclick = () => {
+      const newWeek = addWeeks(state.currentWeek, -1);
+      if (isInSchoolYear(newWeek)) {
+        state.currentWeek = newWeek;
+        updateWeekInfo();
+        renderGrid();
+      }
+    };
+    
+    el('next-week').onclick = () => {
+      const newWeek = addWeeks(state.currentWeek, 1);
+      if (isInSchoolYear(newWeek)) {
+        state.currentWeek = newWeek;
+        updateWeekInfo();
+        renderGrid();
+      }
+    };
+    
+    updateWeekInfo();
+  }
+
+  function updateWeekInfo() {
+    el('week-info').textContent = formatWeekRange(state.currentWeek);
+  }
+
+  function setupTopBar(){
+    // tryb widoku
+    const m = el('mode');
+    const ent = el('entity');
+    m.value = state.mode;
+    m.onchange = ()=>{ state.mode = m.value; updateEntityOptions(); };
+    el('btn-open').onclick = ()=>{ state.entity = ent.value; renderGrid(); };
+
+    updateEntityOptions();
+  }
+
+  function updateEntityOptions(){
+    const ent = el('entity');
+    let list = [];
+    if(state.mode === 'class') {
+      list = dict.classes;
+    } else if(state.mode === 'teacher') {
+      list = dict.teachers;
+    } else if(state.mode === 'room') {
+      list = dict.rooms;
+    }
+    
+    ent.innerHTML = list.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    if(!state.entity || !list.includes(state.entity)){
+      state.entity = list[0] || '';
+    }
+    ent.value = state.entity;
+  }
+
+  // ---------- Panel słowników ----------
+  function setupDictPanel(){
+    const bind = (btnId, inputId, key, pillsId)=>{
+      el(btnId).onclick = ()=>{
+        const val = el(inputId).value.trim();
+        if(!val) return;
+        if(!dict[key].includes(val)){
+          dict[key].push(val);
+          el(inputId).value = '';
+          persist();
+          updateEntityOptions();
+          renderPills();
+          updateAbsenceSelects();
+        }
+      };
+      // Enter w inputach
+      el(inputId).addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); el(btnId).click(); } });
+    };
+    bind('addClass','newClass','classes','pill-classes');
+    bind('addTeacher','newTeacher','teachers','pill-teachers');
+    bind('addRoom','newRoom','rooms','pill-rooms');
+    bind('addSubject','newSubject','subjects','pill-subjects');
+
+    renderPills();
+  }
+
+  function renderPills(){
+    const render = (id, arr, key)=>{
+      const c = el(id);
+      c.innerHTML = '';
+      arr.forEach((name, idx)=>{
+        const p = document.createElement('span');
+        p.className = 'pill';
+        p.innerHTML = `${escapeHtml(name)} <button title="Usuń" aria-label="Usuń">×</button>`;
+        p.querySelector('button').onclick = ()=>{
+          if(confirm(`Usunąć z listy: ${name}?`)){
+            arr.splice(idx,1);
+            persist();
+            renderPills();
+            updateEntityOptions();
+            updateAbsenceSelects();
+          }
+        };
+        c.appendChild(p);
+      });
+    };
+    render('pill-classes', dict.classes, 'classes');
+    render('pill-teachers', dict.teachers, 'teachers');
+    render('pill-rooms', dict.rooms, 'rooms');
+    render('pill-subjects', dict.subjects, 'subjects');
+  }
+
+  // ---------- Panel nieobecności ----------
+  function setupAbsencePanel(){
+    // Obsługa zakładek
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.onclick = () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+        tab.classList.add('active');
+        el(tab.dataset.tab).classList.add('active');
+      };
+    });
+
+    updateAbsenceSelects();
+    setupAbsenceDateSelectors();
+
+    // Nieobecność nauczyciela
+    el('add-teacher-absence').onclick = () => {
+      const teacher = el('absent-teacher').value;
+      const fromPeriod = parseInt(el('absent-from-period').value);
+      const toPeriod = parseInt(el('absent-to-period').value);
+      const reason = el('absent-reason').value.trim();
+      
+      if(!teacher) {
+        alert('Wybierz nauczyciela');
+        return;
+      }
+
+      if(fromPeriod > toPeriod) {
+        alert('Lekcja początkowa nie może być późniejsza niż końcowa');
+        return;
+      }
+
+      const absence = {
+        id: cryptoRandomId(),
+        type: 'teacher',
+        entity: teacher,
+        date: state.currentAbsenceDate,
+        reason: reason || 'Nieobecność',
+        fromPeriod: fromPeriod,
+        toPeriod: toPeriod
+      };
+
+      state.absences.push(absence);
+      
+      // Automatyczne tworzenie zastępstw dla lekcji tego nauczyciela
+      createSubstitutionsForTeacherAbsence(teacher, state.currentAbsenceDate, fromPeriod, toPeriod);
+      
+      el('absent-reason').value = '';
+      persist();
+      renderAbsenceLists();
+      renderGrid();
+    };
+
+    // Nieobecność klasy
+    el('add-class-absence').onclick = () => {
+      const className = el('absent-class').value;
+      const fromPeriod = parseInt(el('absent-class-from-period').value);
+      const toPeriod = parseInt(el('absent-class-to-period').value);
+      const reason = el('absent-class-reason').value.trim();
+      
+      if(!className) {
+        alert('Wybierz klasę');
+        return;
+      }
+
+      if(fromPeriod > toPeriod) {
+        alert('Lekcja początkowa nie może być późniejsza niż końcowa');
+        return;
+      }
+
+      const absence = {
+        id: cryptoRandomId(),
+        type: 'class',
+        entity: className,
+        date: state.currentClassAbsenceDate,
+        reason: reason || 'Nieobecność klasy',
+        fromPeriod: fromPeriod,
+        toPeriod: toPeriod
+      };
+
+      state.absences.push(absence);
+      
+      el('absent-class-reason').value = '';
+      persist();
+      renderAbsenceLists();
+      renderGrid();
+    };
+  }
+
+  function setupAbsenceDateSelectors() {
+    // Ustawienie dat na dzisiaj
+    el('absence-date-selector').value = state.currentAbsenceDate;
+    el('class-absence-date-selector').value = state.currentClassAbsenceDate;
+    el('substitution-date-selector').value = state.currentSubstitutionDate;
+    
+    updateAbsenceDateDisplays();
+
+    // Obsługa przycisków ustawiania dat
+    el('set-absence-date').onclick = () => {
+      state.currentAbsenceDate = el('absence-date-selector').value;
+      updateAbsenceDateDisplays();
+      renderAbsenceLists();
+    };
+
+    el('set-class-absence-date').onclick = () => {
+      state.currentClassAbsenceDate = el('class-absence-date-selector').value;
+      updateAbsenceDateDisplays();
+      renderAbsenceLists();
+    };
+
+    el('set-substitution-date').onclick = () => {
+      state.currentSubstitutionDate = el('substitution-date-selector').value;
+      updateAbsenceDateDisplays();
+      renderAbsenceLists();
+    };
+  }
+
+  function updateAbsenceDateDisplays() {
+    el('current-absence-date').textContent = `Zarządzanie nieobecnościami na: ${formatDate(state.currentAbsenceDate)}`;
+    el('current-class-absence-date').textContent = `Zarządzanie nieobecnościami na: ${formatDate(state.currentClassAbsenceDate)}`;
+    el('current-substitution-date').textContent = `Zarządzanie zastępstwami na: ${formatDate(state.currentSubstitutionDate)}`;
+  }
+
+  function updateAbsenceSelects(){
+    fillSelect(el('absent-teacher'), dict.teachers.map(t => ({v: t, l: t})));
+    fillSelect(el('absent-class'), dict.classes.map(c => ({v: c, l: c})));
+    
+    // Wypełnij selecty dla okresów lekcyjnych
+    const periodOptions = PERIODS.map(p => ({v: p, l: `Lekcja ${p}`}));
+    fillSelect(el('absent-from-period'), periodOptions);
+    fillSelect(el('absent-to-period'), periodOptions);
+    fillSelect(el('absent-class-from-period'), periodOptions);
+    fillSelect(el('absent-class-to-period'), periodOptions);
+    
+    // Ustaw domyślne wartości
+    el('absent-to-period').value = '9';
+    el('absent-class-to-period').value = '9';
+  }
+
+  function createSubstitutionsForTeacherAbsence(teacher, date, fromPeriod, toPeriod){
+    const dayOfWeek = new Date(date).getDay();
+    const dayIndex = dayOfWeek === 0 ? -1 : dayOfWeek - 1; // Poniedziałek = 0
+    
+    if(dayIndex < 0 || dayIndex > 4) return; // Tylko dni robocze
+
+    // Znajdź wszystkie lekcje tego nauczyciela w tym dniu i okresie
+    const teacherLessons = state.lessons.filter(lesson => 
+      lesson.teacher === teacher && 
+      lesson.day === dayIndex &&
+      lesson.period >= fromPeriod &&
+      lesson.period <= toPeriod
+    );
+
+    teacherLessons.forEach(lesson => {
+      // Sprawdź czy już nie ma zastępstwa dla tej lekcji w tym dniu
+      const existingSubstitution = state.substitutions.find(sub => 
+        sub.lessonId === lesson.id && sub.date === date
+      );
+      if(!existingSubstitution) {
+        const substitution = {
+          id: cryptoRandomId(),
+          lessonId: lesson.id,
+          type: 'substitute',
+          date: date,
+          originalTeacher: teacher,
+          substituteTeacher: null, // Do przydzielenia
+          substituteSubject: lesson.subject,
+          substituteRoom: lesson.room,
+          notes: `Zastępstwo za ${teacher}`
+        };
+        state.substitutions.push(substitution);
+      }
+    });
+  }
+
+  function renderAbsenceLists(){
+    renderTeacherAbsences();
+    renderClassAbsences();
+    renderSubstitutions();
+  }
+
+  function renderTeacherAbsences(){
+    const container = el('teacher-absence-list');
+    const teacherAbsences = state.absences.filter(a => 
+      a.type === 'teacher' && a.date === state.currentAbsenceDate
+    );
+    
+    container.innerHTML = '';
+    
+    if(teacherAbsences.length === 0) {
+      container.innerHTML = '<div class="hint">Brak nieobecności nauczycieli na wybraną datę</div>';
+      return;
+    }
+
+    teacherAbsences.forEach(absence => {
+      const item = document.createElement('div');
+      item.className = 'absence-item';
+      
+      const info = document.createElement('div');
+      info.className = 'absence-info';
+      
+      const periodText = absence.fromPeriod === absence.toPeriod ? 
+        `lekcja ${absence.fromPeriod}` : 
+        `lekcje ${absence.fromPeriod}-${absence.toPeriod}`;
+      
+      info.innerHTML = `
+        <div style="font-weight:700;">${escapeHtml(absence.entity)}</div>
+        <div style="font-size:12px; color:var(--sub);">${formatDate(absence.date)} - ${periodText}</div>
+        <div style="font-size:12px; color:var(--sub);">${escapeHtml(absence.reason)}</div>
+      `;
+      
+      const actions = document.createElement('div');
+      actions.className = 'absence-actions';
+      
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = 'Usuń';
+      deleteBtn.className = 'danger';
+      deleteBtn.onclick = () => {
+        if(confirm('Usunąć nieobecność? Zastępstwa zostaną zachowane.')) {
+          state.absences = state.absences.filter(a => a.id !== absence.id);
+          persist();
+          renderAbsenceLists();
+          renderGrid();
+        }
+      };
+      
+      actions.appendChild(deleteBtn);
+      item.appendChild(info);
+      item.appendChild(actions);
+      container.appendChild(item);
+    });
+  }
+
+  function renderClassAbsences(){
+    const container = el('class-absence-list');
+    const classAbsences = state.absences.filter(a => 
+      a.type === 'class' && a.date === state.currentClassAbsenceDate
+    );
+    
+    container.innerHTML = '';
+    
+    if(classAbsences.length === 0) {
+      container.innerHTML = '<div class="hint">Brak nieobecności klas na wybraną datę</div>';
+      return;
+    }
+
+    classAbsences.forEach(absence => {
+      const item = document.createElement('div');
+      item.className = 'absence-item';
+      
+      const info = document.createElement('div');
+      info.className = 'absence-info';
+      
+      const periodText = absence.fromPeriod === absence.toPeriod ? 
+        `lekcja ${absence.fromPeriod}` : 
+        `lekcje ${absence.fromPeriod}-${absence.toPeriod}`;
+      
+      info.innerHTML = `
+        <div style="font-weight:700;">${escapeHtml(absence.entity)}</div>
+        <div style="font-size:12px; color:var(--sub);">${formatDate(absence.date)} - ${periodText}</div>
+        <div style="font-size:12px; color:var(--sub);">${escapeHtml(absence.reason)}</div>
+      `;
+      
+      const actions = document.createElement('div');
+      actions.className = 'absence-actions';
+      
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = 'Usuń';
+      deleteBtn.className = 'danger';
+      deleteBtn.onclick = () => {
+        if(confirm('Usunąć nieobecność klasy?')) {
+          state.absences = state.absences.filter(a => a.id !== absence.id);
+          persist();
+          renderAbsenceLists();
+          renderGrid();
+        }
+      };
+      
+      actions.appendChild(deleteBtn);
+      item.appendChild(info);
+      item.appendChild(actions);
+      container.appendChild(item);
+    });
+  }
+
+  function renderSubstitutions(){
+    const container = el('substitutions-list');
+    const substitutions = state.substitutions.filter(s => s.date === state.currentSubstitutionDate);
+    
+    container.innerHTML = '';
+    
+    if(substitutions.length === 0) {
+      container.innerHTML = '<div class="hint">Brak zastępstw na wybraną datę</div>';
+      return;
+    }
+
+    substitutions.forEach(substitution => {
+      const lesson = state.lessons.find(l => l.id === substitution.lessonId);
+      if(!lesson) return;
+
+      const item = document.createElement('div');
+      item.className = 'absence-item';
+      
+      const info = document.createElement('div');
+      info.className = 'absence-info';
+      
+      let statusText = '';
+      let statusClass = '';
+      
+      switch(substitution.type) {
+        case 'substitute':
+          statusText = substitution.substituteTeacher ? 
+            `Zastępstwo: ${substitution.substituteTeacher}` : 
+            'Oczekuje na przydzielenie zastępcy';
+          statusClass = substitution.substituteTeacher ? 'success' : 'warning';
+          break;
+        case 'cancel':
+          statusText = 'Lekcja odwołana';
+          statusClass = 'danger';
+          break;
+        case 'subject-change':
+          statusText = `Zmiana przedmiotu: ${substitution.substituteSubject}`;
+          statusClass = 'warning';
+          break;
+      }
+      
+      info.innerHTML = `
+        <div style="font-weight:700;">${escapeHtml(lesson.subject)} - ${escapeHtml(lesson.class || 'Brak klasy')}</div>
+        <div style="font-size:12px; color:var(--sub);">
+          ${DAYS[lesson.day]} lekcja ${lesson.period} - ${escapeHtml(lesson.teacher)}
+        </div>
+        <div style="font-size:12px;" class="${statusClass}">${statusText}</div>
+        ${substitution.notes ? `<div style="font-size:11px; color:var(--sub);">${escapeHtml(substitution.notes)}</div>` : ''}
+      `;
+      
+      const actions = document.createElement('div');
+      actions.className = 'absence-actions';
+      
+      const editBtn = document.createElement('button');
+      editBtn.textContent = 'Edytuj';
+      editBtn.className = 'primary';
+      editBtn.onclick = () => openSubstituteDialog(substitution);
+      
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = 'Usuń';
+      deleteBtn.className = 'danger';
+      deleteBtn.onclick = () => {
+        if(confirm('Usunąć zastępstwo?')) {
+          state.substitutions = state.substitutions.filter(s => s.id !== substitution.id);
+          persist();
+          renderAbsenceLists();
+          renderGrid();
+        }
+      };
+      
+      actions.appendChild(editBtn);
+      actions.appendChild(deleteBtn);
+      item.appendChild(info);
+      item.appendChild(actions);
+      container.appendChild(item);
+    });
+  }
+
+  function openSubstituteDialog(substitution){
+    const lesson = state.lessons.find(l => l.id === substitution.lessonId);
+    if(!lesson) return;
+
+    const dlg = el('substituteDlg');
+    
+    // Wypełnij informacje o oryginalnej lekcji
+    el('original-lesson-details').innerHTML = `
+      <strong>${escapeHtml(lesson.subject)}</strong> - ${escapeHtml(lesson.teacher)}<br>
+      ${escapeHtml(lesson.class || 'Brak klasy')} ${lesson.group ? `(${escapeHtml(lesson.group)})` : ''}<br>
+      ${DAYS[lesson.day]} lekcja ${lesson.period}, sala ${escapeHtml(lesson.room)}
+    `;
+
+    // Wypełnij dostępnych nauczycieli (tylko wolnych w tym czasie)
+    const availableTeachers = getAvailableTeachers(lesson.day, lesson.period, lesson.teacher, substitution.date);
+    fillSelect(el('substitute-teacher'), [
+      {v: '', l: 'Wybierz zastępcę'},
+      ...availableTeachers.map(t => ({v: t, l: t}))
+    ]);
+    
+    fillSelect(el('substitute-subject'), dict.subjects.map(s => ({v: s, l: s})));
+    fillSelect(el('substitute-room'), dict.rooms.map(r => ({v: r, l: r})));
+
+    // Ustaw obecne wartości
+    el('substitute-action').value = substitution.type;
+    el('substitute-teacher').value = substitution.substituteTeacher || '';
+    el('substitute-subject').value = substitution.substituteSubject || lesson.subject;
+    el('substitute-room').value = substitution.substituteRoom || lesson.room;
+    el('substitute-notes').value = substitution.notes || '';
+
+    // Obsługa zmiany akcji
+    el('substitute-action').onchange = () => {
+      const action = el('substitute-action').value;
+      el('substitute-teacher').disabled = action === 'cancel';
+      el('substitute-subject').disabled = action === 'substitute';
+    };
+    
+    // Wywołaj onchange żeby ustawić początkowy stan
+    el('substitute-action').onchange();
+
+    dlg.showModal();
+
+    dlg.onclose = () => {
+      if(dlg.returnValue === 'save') {
+        substitution.type = el('substitute-action').value;
+        substitution.substituteTeacher = el('substitute-teacher').value || null;
+        substitution.substituteSubject = el('substitute-subject').value || lesson.subject;
+        substitution.substituteRoom = el('substitute-room').value || lesson.room;
+        substitution.notes = el('substitute-notes').value.trim() || null;
+        
+        persist();
+        renderAbsenceLists();
+        renderGrid();
+      }
+    };
+  }
+
+function getAvailableTeachers(day, period, excludeTeacher, date){
+    // Znajdź wszystkich nauczycieli, którzy mają normalne lekcje w tym czasie
+    const busyTeachers = state.lessons
+      .filter(l => l.day === day && l.period === period)
+      .map(l => l.teacher);
+    
+    // Znajdź nauczycieli, którzy mają zastępstwa w tym czasie
+    const substitutionTeachers = state.substitutions
+      .filter(s => s.date === date && s.substituteTeacher)
+      .map(s => {
+        const lesson = state.lessons.find(l => l.id === s.lessonId);
+        return lesson && lesson.day === day && lesson.period === period ? s.substituteTeacher : null;
+      })
+      .filter(teacher => teacher !== null);
+    
+    // Sprawdź też nieobecności nauczycieli na ten dzień
+    const absentTeachers = state.absences
+      .filter(a => a.type === 'teacher' && a.date === date && 
+                   period >= a.fromPeriod && period <= a.toPeriod)
+      .map(a => a.entity);
+    
+    // Połącz listy zajętych nauczycieli (normalne lekcje + zastępstwa)
+    const allBusyTeachers = [...busyTeachers, ...substitutionTeachers];
+    
+    return dict.teachers.filter(teacher => 
+      teacher !== excludeTeacher && 
+      !allBusyTeachers.includes(teacher) &&
+      !absentTeachers.includes(teacher)
+    );
+}
+
+  // ---------- Render siatki ----------
+function renderGrid(){
+    const grid = el('grid');
+    grid.innerHTML = '';
+    
+    // Pobierz daty tygodnia dla planu ruchomego
+    const weekDates = state.planType === 'dynamic' ? getWeekDates(state.currentWeek) : null;
+    
+    PERIODS.forEach(period =>{
+        const row = document.createElement('div');
+        row.className = 'row';
+        const p = document.createElement('div');
+        p.className = 'period';
+        p.textContent = period;
+        row.appendChild(p);
+
+        DAYS.forEach((dLabel, dIdx)=>{
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            
+            const currentDate = weekDates ? weekDates[dIdx] : null;
+            
+            // Dla planu ruchomego - znajdź lekcje, które powinny być wyświetlane
+            let items = [];
+            
+            if(state.planType === 'dynamic' && currentDate) {
+                // Dla nauczyciela - pokaż jego normalne lekcje ORAZ zastępstwa
+                if(state.mode === 'teacher') {
+                    // 1. Normalne lekcje tego nauczyciela
+                    const normalLessons = state.lessons.filter(l => 
+                        l.day === dIdx && l.period === period && l.teacher === state.entity
+                    );
+                    
+                    // 2. Zastępstwa tego nauczyciela
+                    const substitutionLessons = state.lessons.filter(lesson => {
+                        const substitution = state.substitutions.find(s => 
+                            s.lessonId === lesson.id && s.date === currentDate
+                        );
+                        return substitution && 
+                               substitution.substituteTeacher === state.entity && 
+                               lesson.day === dIdx && lesson.period === period;
+                    }).map(lesson => {
+                        // Oznacz lekcję jako zastępstwo
+                        return {...lesson, isSubstitution: true};
+                    });
+                    
+                    items = [...normalLessons, ...substitutionLessons];
+                } 
+                // Dla klasy i sali - standardowe filtrowanie
+                else {
+                    items = state.lessons.filter(l => l.day===dIdx && l.period===period && (
+                        state.mode==='class' ? l.class===state.entity : 
+                        l.room===state.entity
+                    ));
+                }
+            } 
+            // Dla planu stałego - standardowe filtrowanie
+            else {
+                items = state.lessons.filter(l => l.day===dIdx && l.period===period && (
+                    state.mode==='class' ? l.class===state.entity : 
+                    state.mode==='teacher' ? l.teacher===state.entity : 
+                    l.room===state.entity
+                ));
+            }
+
+            if(items.length){
+                items.forEach(lesson=>{
+                    cell.appendChild(renderLessonCard(lesson, dIdx, period, currentDate));
+                });
+            } else {
+                const em = document.createElement('div');
+                em.className = 'empty';
+                em.textContent = '—';
+                cell.appendChild(em);
+            }
+
+            // klik pustej części komórki dodaje nową (tylko dla planu stałego)
+            if(state.planType === 'fixed') {
+                cell.addEventListener('click', (ev)=>{
+                    if(ev.target.closest('.lesson')) return; // oddzielnie obsługujemy klik w kartę
+                    openLessonDialog({ day: dIdx, period, presetByCell: true });
+                });
+            }
+
+            row.appendChild(cell);
+        });
+        grid.appendChild(row);
+    });
+}
+
+function renderLessonCard(lesson, day, period, currentDate){
+    const wrap = document.createElement('div');
+    wrap.className = 'lesson';
+
+    // Sprawdź status lekcji (tylko dla planu ruchomego)
+    let lessonStatus = { type: 'normal', label: 'Lekcja', message: '' };
+    if(state.planType === 'dynamic' && currentDate) {
+        lessonStatus = getLessonStatus(lesson, day, period, currentDate);
+        if(lessonStatus.type !== 'normal') {
+            wrap.classList.add(lessonStatus.type);
+        }
+    }
+
+    const title = document.createElement('div');
+    title.className = 'name';
+    
+    let topRight;
+    let displaySubject = lesson.subject;
+    let displayTeacher = lesson.teacher;
+    let substitutionInfo = '';
+    
+    // Sprawdź zastępstwa (tylko dla planu ruchomego)
+    if(state.planType === 'dynamic' && currentDate) {
+        const substitution = state.substitutions.find(s => s.lessonId === lesson.id && s.date === currentDate);
+        
+        // Jeśli to lekcja oznaczona jako zastępstwo
+        if(lesson.isSubstitution) {
+            displayTeacher = state.entity; // Nauczyciel B
+            substitutionInfo = `Zastępstwo za: ${lesson.teacher}`;
+            wrap.classList.add('substitute');
+        }
+        else if(substitution) {
+            if(substitution.type === 'substitute' && substitution.substituteTeacher) {
+                if(state.mode === 'teacher' && lesson.teacher === state.entity) {
+                    // Dla nauczyciela, który jest nieobecny - POKAŻ skreśloną lekcję z informacją o zastępstwie
+                    wrap.classList.add('absent');
+                    substitutionInfo = `Zastępstwo: ${substitution.substituteTeacher}`;
+                } else {
+                    displayTeacher = substitution.substituteTeacher;
+                    substitutionInfo = `${lesson.teacher} > ${substitution.substituteTeacher}`;
+                }
+            } else if(substitution.type === 'subject-change') {
+                substitutionInfo = `${lesson.subject} > ${substitution.substituteSubject}`;
+                displaySubject = substitution.substituteSubject;
+                if(substitution.substituteTeacher) {
+                    displayTeacher = substitution.substituteTeacher;
+                    if(substitutionInfo) substitutionInfo += `, `;
+                    substitutionInfo += `${lesson.teacher} > ${substitution.substituteTeacher}`;
+                }
+            }
+        }
+    }
+    
+    if(state.mode === 'class') {
+        topRight = displayTeacher;
+    } else if(state.mode === 'teacher') {
+        topRight = lesson.group ? `${lesson.class}/${lesson.group}` : lesson.class || 'Brak klasy';
+    } else if(state.mode === 'room') {
+        topRight = `${displayTeacher} · ${lesson.group ? `${lesson.class}/${lesson.group}` : lesson.class || 'Brak klasy'}`;
+    }
+    
+    title.textContent = `${displaySubject} · ${topRight}`;
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    let roomText = lesson.room;
+    if(state.planType === 'dynamic' && currentDate) {
+        const substitution = state.substitutions.find(s => s.lessonId === lesson.id && s.date === currentDate);
+        if(substitution && substitution.substituteRoom && substitution.substituteRoom !== lesson.room) {
+            roomText = substitution.substituteRoom;
+        }
+    }
+    
+    if(state.mode === 'room') {
+        meta.textContent = lessonStatus.message || '';
+    } else {
+        meta.textContent = `Sala ${roomText}${lessonStatus.message ? ` · ${lessonStatus.message}` : ''}`;
+    }
+
+    // Dodaj informację o zastępstwie
+    if(substitutionInfo) {
+        const subInfo = document.createElement('div');
+        subInfo.className = 'substitution-info';
+        subInfo.textContent = substitutionInfo;
+        wrap.appendChild(subInfo);
+    }
+
+    const tags = document.createElement('div');
+    tags.className = 'tags';
+    const badge = document.createElement('span');
+    badge.className = `tag ${lessonStatus.type}`;
+    badge.textContent = lessonStatus.label;
+    tags.appendChild(badge);
+
+    wrap.appendChild(tags);
+    wrap.appendChild(title);
+    wrap.appendChild(meta);
+
+    wrap.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        
+        // Jeśli jest zastępstwo i plan ruchomy, otwórz dialog zastępstwa
+        if(state.planType === 'dynamic' && currentDate) {
+            const substitution = state.substitutions.find(s => s.lessonId === lesson.id && s.date === currentDate);
+            if(substitution) {
+                openSubstituteDialog(substitution);
+                return;
+            }
+        }
+        
+        // Dla planu stałego lub braku zastępstwa - otwórz dialog lekcji
+        if(state.planType === 'fixed') {
+            openLessonDialog({ id: lesson.id });
+        }
+    });
+
+    return wrap;
+}
+
+  function getLessonStatus(lesson, day, period, date) {
+    // Sprawdź nieobecność nauczyciela
+    const teacherAbsent = state.absences.find(a => 
+      a.type === 'teacher' && 
+      a.entity === lesson.teacher && 
+      a.date === date &&
+      period >= a.fromPeriod &&
+      period <= a.toPeriod
+    );
+    
+    // Sprawdź nieobecność klasy
+    const classAbsent = state.absences.find(a => 
+      a.type === 'class' && 
+      a.entity === lesson.class && 
+      a.date === date &&
+      period >= a.fromPeriod &&
+      period <= a.toPeriod
+    );
+    
+    // Sprawdź zastępstwo
+    const substitution = state.substitutions.find(s => s.lessonId === lesson.id && s.date === date);
+    
+    if(classAbsent) {
+      return {
+        type: 'class-absent',
+        label: 'Klasa nieobecna',
+        message: classAbsent.reason
+      };
+    }
+    
+    if(substitution) {
+      switch(substitution.type) {
+        case 'substitute':
+          if(substitution.substituteTeacher) {
+            return {
+              type: 'substitute',
+              label: 'Zastępstwo',
+              message: `Zastępca: ${substitution.substituteTeacher}`
+            };
+          } else {
+            return {
+              type: 'absent',
+              label: 'Brak zastępcy',
+              message: 'Oczekuje na przydzielenie'
+            };
+          }
+        case 'cancel':
+          return {
+            type: 'cancelled',
+            label: 'Odwołana',
+            message: 'Lekcja nie odbędzie się'
+          };
+        case 'subject-change':
+          return {
+            type: 'substitute',
+            label: 'Zmiana przedmiotu',
+            message: `Nowy przedmiot: ${substitution.substituteSubject}`
+          };
+      }
+    }
+    
+    if(teacherAbsent) {
+      return {
+        type: 'absent',
+        label: 'Nauczyciel nieobecny',
+        message: teacherAbsent.reason
+      };
+    }
+    
+    return {
+      type: 'normal',
+      label: 'Lekcja',
+      message: ''
+    };
+  }
+
+  // ---------- Dialog dodawania/edycji ----------
+  function openLessonDialog(opts){
+    const dlg = el('lessonDlg');
+    const form = el('lessonForm');
+
+    // listy wyboru
+    fillSelect(el('fDay'), DAYS.map((d,i)=>({v:i, l:`${d}`})));
+    fillSelect(el('fPeriod'), PERIODS.map(p=>({v:p, l:String(p)})));
+    fillSelect(el('fSubject'), dict.subjects.map(s=>({v:s, l:s})));
+    fillSelect(el('fTeacher'), dict.teachers.map(s=>({v:s, l:s})));
+    
+    // Dla klasy dodajemy opcję "Brak klasy" tylko w trybie nauczyciela
+    if(state.mode === 'teacher') {
+      fillSelect(el('fClass'), [{v:'', l:'Brak klasy'}, ...dict.classes.map(s=>({v:s, l:s}))]);
+    } else {
+      fillSelect(el('fClass'), dict.classes.map(s=>({v:s, l:s})));
+    }
+    
+    fillSelect(el('fRoom'), dict.rooms.map(s=>({v:s, l:s})));
+
+    let editing = null;
+    if(opts.id){
+      editing = state.lessons.find(l=>l.id===opts.id) || null;
+    }
+
+    if(editing){
+      el('dlgTitle').textContent = 'Edytuj lekcję';
+      el('fDay').value = String(editing.day);
+      el('fPeriod').value = String(editing.period);
+      el('fSubject').value = editing.subject;
+      el('fTeacher').value = editing.teacher;
+      el('fClass').value = editing.class || '';
+      el('fRoom').value = editing.room;
+      el('fGroup').value = editing.group || '';
+      el('btnDelete').style.display = '';
+      // Poprawione: Ustawienie poprawnej funkcji dla przycisku USUŃ
+      el('btnDelete').onclick = () => {
+        if(confirm('Czy na pewno chcesz usunąć tę lekcję?')) {
+          deleteLesson(editing.id);
+          dlg.close();
+          renderGrid();
+        }
+      };
+    } else {
+      el('dlgTitle').textContent = 'Nowa lekcja';
+      el('btnDelete').style.display = 'none';
+      el('btnDelete').onclick = null;
+      // preselecty z komórki i trybu
+      if(opts.presetByCell){
+        el('fDay').value = String(opts.day);
+        el('fPeriod').value = String(opts.period);
+        if(state.mode==='class' && state.entity){ el('fClass').value = state.entity; }
+        if(state.mode==='teacher' && state.entity){ el('fTeacher').value = state.entity; }
+        if(state.mode==='room' && state.entity){ el('fRoom').value = state.entity; }
+      }
+    }
+
+    dlg.showModal();
+
+    dlg.onclose = ()=>{
+      if(dlg.returnValue==='save'){
+        const payload = {
+          id: editing?.id || cryptoRandomId(),
+          day: parseInt(el('fDay').value,10),
+          period: parseInt(el('fPeriod').value,10),
+          subject: el('fSubject').value,
+          teacher: el('fTeacher').value,
+          class: el('fClass').value || undefined, // pusty string zostanie zamieniony na undefined
+          room: el('fRoom').value,
+          group: el('fGroup').value.trim() || undefined
+        };
+        upsertLesson(payload);
+        renderGrid();
+      }
+    };
+  }
+
+  function upsertLesson(l){
+    // tu zezwalamy na wiele lekcji w tej samej komórce (grupy) – brak kasowania kolizji
+    const idx = state.lessons.findIndex(x=>x.id===l.id);
+    if(idx>=0) state.lessons[idx]=l; else state.lessons.push(l);
+    persist();
+  }
+
+  function deleteLesson(id){
+    state.lessons = state.lessons.filter(l=>l.id!==id);
+    // Usuń również powiązane zastępstwa
+    state.substitutions = state.substitutions.filter(s => s.lessonId !== id);
+    persist();
+  }
+
+  function persist(){
+    store.save({
+      dict, 
+      lessons: state.lessons,
+      absences: state.absences,
+      substitutions: state.substitutions
+    });
+  }
+
+  // ---------- Helpery ----------
+  function fillSelect(sel, items){
+    sel.innerHTML = items.map(i=>`<option value="${escapeHtml(i.v)}">${escapeHtml(i.l)}</option>`).join('');
+  }
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
+  function cryptoRandomId(){ if(window.crypto?.randomUUID) return crypto.randomUUID(); return 'id-' + Math.random().toString(36).slice(2,10); }
+  function formatDate(dateStr) {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('pl-PL');
+  }
+
+  // ---------- Start ----------
+  init();
+  </script>
+</body>
+</html>
