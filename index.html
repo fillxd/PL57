@@ -474,12 +474,15 @@ const store = {
     return new Date().toISOString().split('T')[0];
   }
 
-  function getWeekStart(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Poniedziałek jako początek tygodnia
-    return new Date(d.setDate(diff)).toISOString().split('T')[0];
-  }
+function getWeekStart(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  console.log('Input:', date, 'Day:', day, 'Date object:', d);
+  const diff = day === 0 ? 1 : 1 - day;
+  const result = new Date(d.setDate(d.getDate() + diff)).toISOString().split('T')[0];
+  console.log('Result:', result);
+  return result;
+}
 
   function addWeeks(dateStr, weeks) {
     const date = new Date(dateStr);
@@ -541,6 +544,7 @@ async function init(){
   state.lessons = saved.lessons;
   state.absences = saved.absences || [];
   state.substitutions = saved.substitutions || [];
+    state.currentWeek = '2025-09-01';
   Object.assign(dict, saved.dict);
   
   // ... reszta funkcji init bez zmian
