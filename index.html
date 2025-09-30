@@ -7,7 +7,7 @@
   <link rel="icon" type="image/x-icon" href="favicon.ico">
 
   
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+ <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
   <style>
@@ -388,6 +388,37 @@
 
   <script>
   // ---------- Stałe ----------
+  // ---------- LocalStorage dla lekcji, nieobecności, zastępstw ----------
+const localStore = {
+  load() {
+    try {
+      const data = localStorage.getItem('timetableAppData');
+      if (!data) return { lessons: [], absences: [], substitutions: [] };
+      
+      const parsed = JSON.parse(data);
+      return {
+        lessons: parsed.lessons || [],
+        absences: parsed.absences || [],
+        substitutions: parsed.substitutions || []
+      };
+    } catch(e) {
+      console.error('Błąd localStorage:', e);
+      return { lessons: [], absences: [], substitutions: [] };
+    }
+  },
+  
+  save(payload) {
+    try {
+      localStorage.setItem('timetableAppData', JSON.stringify({
+        lessons: payload.lessons || [],
+        absences: payload.absences || [],
+        substitutions: payload.substitutions || []
+      }));
+    } catch(error) {
+      console.error('Błąd zapisu do localStorage:', error);
+    }
+  }
+};
   const DAYS = ["PN","WT","ŚR","CZ","PT"];
   const PERIODS = Array.from({length: 10}, (_,i)=>i); // 0..9
 
@@ -403,12 +434,11 @@
     subjects: []
   };
 
-  // ---------- Magazyn ----------
 // ---------- Magazyn ----------
 const store = {
   async load(){
     try{
-      // Firebase initialization
+      // Firebase tylko dla słowników
       const firebaseConfig = {
         apiKey: "AIzaSyBU5TsxSF_IsPhZb-fPqUaM_Lbcyn75-QU",
         authDomain: "plan57.firebaseapp.com",
@@ -427,29 +457,25 @@ const store = {
       const snapshot = await database.ref('timetableData').once('value');
       const data = snapshot.val();
       
-      if(!data) return {lessons: [], dict, absences: [], substitutions: []};
+      if(!data) return {dict: {classes:[], teachers:[], rooms:[], subjects:[]}};
       
-      // zapewnij struktury
-      if(!data.dict) data.dict = {classes:[], teachers:[], rooms:[], subjects:[]};
-      if(!data.absences) data.absences = [];
-      if(!data.substitutions) data.substitutions = [];
-      
+      // Tylko słowniki z Firebase
       return {
-        lessons: Array.isArray(data.lessons)? data.lessons : [], 
-        dict: data.dict,
-        absences: data.absences,
-        substitutions: data.substitutions
+        dict: data.dict || {classes:[], teachers:[], rooms:[], subjects:[]}
       };
     }catch(e){ 
       console.error('Błąd Firebase:', e);
-      return {lessons: [], dict, absences: [], substitutions: []}; 
+      return {dict: {classes:[], teachers:[], rooms:[], subjects:[]}}; 
     }
   },
   
   async save(payload){ 
     try {
+      // Zapisz tylko słowniki do Firebase
       const database = firebase.database();
-      await database.ref('timetableData').set(payload);
+      await database.ref('timetableData').set({
+        dict: payload.dict
+      });
     } catch(error) {
       console.error('Błąd zapisu do Firebase:', error);
     }
@@ -477,11 +503,11 @@ const store = {
 function getWeekStart(date) {
   const d = new Date(date);
   const day = d.getDay();
-  console.log('Input:', date, 'Day:', day, 'Date object:', d);
-  const diff = day === 0 ? 1 : 1 - day;
-  const result = new Date(d.setDate(d.getDate() + diff)).toISOString().split('T')[0];
-  console.log('Result:', result);
-  return result;
+  // Poprawione - zawsze zwróć poniedziałek tego tygodnia
+  const diff = day === 0 ? -6 : 1 - day;
+  const result = new Date(d);
+  result.setDate(d.getDate() + diff);
+  return result.toISOString().split('T')[0];
 }
 
   function addWeeks(dateStr, weeks) {
@@ -544,10 +570,14 @@ async function init(){
   state.lessons = saved.lessons;
   state.absences = saved.absences || [];
   state.substitutions = saved.substitutions || [];
-    state.currentWeek = '2025-09-01';
   Object.assign(dict, saved.dict);
   
-  // ... reszta funkcji init bez zmian
+  // Lekcje, nieobecności, zastępstwa z localStorage
+  const localData = localStore.load();
+  state.lessons = localData.lessons;
+  state.absences = localData.absences || [];
+  state.substitutions = localData.substitutions || [];
+    state.currentWeek = getWeekStart(new Date());
     
     // Wyczyść stare nieobecności
     cleanupOldAbsences();
@@ -614,27 +644,21 @@ async function init(){
     el('plan-dynamic').classList.toggle('active', state.planType === 'dynamic');
   }
 
-  function setupWeekNavigation() {
-    el('prev-week').onclick = () => {
-      const newWeek = addWeeks(state.currentWeek, -1);
-      if (isInSchoolYear(newWeek)) {
-        state.currentWeek = newWeek;
-        updateWeekInfo();
-        renderGrid();
-      }
-    };
-    
-    el('next-week').onclick = () => {
-      const newWeek = addWeeks(state.currentWeek, 1);
-      if (isInSchoolYear(newWeek)) {
-        state.currentWeek = newWeek;
-        updateWeekInfo();
-        renderGrid();
-      }
-    };
-    
+function setupWeekNavigation() {
+  el('prev-week').onclick = () => {
+    state.currentWeek = addWeeks(state.currentWeek, -1);
     updateWeekInfo();
-  }
+    renderGrid();
+  };
+  
+  el('next-week').onclick = () => {
+    state.currentWeek = addWeeks(state.currentWeek, 1);
+    updateWeekInfo();
+    renderGrid();
+  };
+  
+  updateWeekInfo();
+}
 
   function updateWeekInfo() {
     el('week-info').textContent = formatWeekRange(state.currentWeek);
@@ -1548,14 +1572,17 @@ function renderLessonCard(lesson, day, period, currentDate){
     persist();
   }
 
-  function persist(){
-    store.save({
-      dict, 
-      lessons: state.lessons,
-      absences: state.absences,
-      substitutions: state.substitutions
-    });
-  }
+function persist(){
+  // Słowniki do Firebase
+  store.save({ dict });
+  
+  // Lekcje, nieobecności, zastępstwa do localStorage
+  localStore.save({
+    lessons: state.lessons,
+    absences: state.absences,
+    substitutions: state.substitutions
+  });
+}
 
   // ---------- Helpery ----------
   function fillSelect(sel, items){
@@ -1573,3 +1600,4 @@ function renderLessonCard(lesson, day, period, currentDate){
   </script>
 </body>
 </html>
+
