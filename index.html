@@ -7,7 +7,7 @@
   <link rel="icon" type="image/x-icon" href="favicon.ico">
 
   
- <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
   <style>
@@ -578,9 +578,7 @@ async function init(){
   state.absences = localData.absences || [];
   state.substitutions = localData.substitutions || [];
     state.currentWeek = getWeekStart(new Date());
-    
-    // Wyczyść stare nieobecności
-    cleanupOldAbsences();
+   
     
     setupTopBar();
     setupDictPanel();
@@ -1600,4 +1598,3 @@ function persist(){
   </script>
 </body>
 </html>
-
