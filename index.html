@@ -148,6 +148,12 @@
 
     .substitution-info{font-size:11px; color:var(--warn); font-style:italic; margin-top:2px}
 
+    .loading{
+      position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+      background:var(--card); padding:20px; border-radius:12px; border:1px solid var(--muted);
+      z-index:1000;
+    }
+
     @media (max-width: 980px){
       .grid-head, .grid{grid-template-columns: 80px repeat(5, 1fr)}
       .period{padding:8px 0}
@@ -386,47 +392,19 @@
     </form>
   </dialog>
 
+  <div id="loading" class="loading" style="display:none;">
+    <div>Ładowanie danych...</div>
+  </div>
+
   <script>
   // ---------- Stałe ----------
-  // ---------- LocalStorage dla lekcji, nieobecności, zastępstw ----------
-const localStore = {
-  load() {
-    try {
-      const data = localStorage.getItem('timetableAppData');
-      if (!data) return { lessons: [], absences: [], substitutions: [] };
-      
-      const parsed = JSON.parse(data);
-      return {
-        lessons: parsed.lessons || [],
-        absences: parsed.absences || [],
-        substitutions: parsed.substitutions || []
-      };
-    } catch(e) {
-      console.error('Błąd localStorage:', e);
-      return { lessons: [], absences: [], substitutions: [] };
-    }
-  },
-  
-  save(payload) {
-    try {
-      localStorage.setItem('timetableAppData', JSON.stringify({
-        lessons: payload.lessons || [],
-        absences: payload.absences || [],
-        substitutions: payload.substitutions || []
-      }));
-    } catch(error) {
-      console.error('Błąd zapisu do localStorage:', error);
-    }
-  }
-};
   const DAYS = ["PN","WT","ŚR","CZ","PT"];
   const PERIODS = Array.from({length: 10}, (_,i)=>i); // 0..9
-
 
   const el = id => document.getElementById(id);
   const $ = sel => document.querySelector(sel);
 
-  // ---------- Dane słownikowe (możesz dodawać z panelu) ----------
+  // ---------- Dane słownikowe ----------
   const dict = {
     classes: [],
     teachers: [],
@@ -434,53 +412,85 @@ const localStore = {
     subjects: []
   };
 
-// ---------- Magazyn ----------
-const store = {
-  async load(){
-    try{
-      // Firebase tylko dla słowników
-      const firebaseConfig = {
-        apiKey: "AIzaSyBU5TsxSF_IsPhZb-fPqUaM_Lbcyn75-QU",
-        authDomain: "plan57.firebaseapp.com",
-        databaseURL: "https://plan57-default-rtdb.europe-west1.firebasedatabase.app",
-        projectId: "plan57",
-        storageBucket: "plan57.firebasestorage.app",
-        messagingSenderId: "96724943053",
-        appId: "1:96724943053:web:cf607d1d0cf539953da984"
-      };
-      
-      if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-      }
-      
-      const database = firebase.database();
-      const snapshot = await database.ref('timetableData').once('value');
-      const data = snapshot.val();
-      
-      if(!data) return {dict: {classes:[], teachers:[], rooms:[], subjects:[]}};
-      
-      // Tylko słowniki z Firebase
-      return {
-        dict: data.dict || {classes:[], teachers:[], rooms:[], subjects:[]}
-      };
-    }catch(e){ 
-      console.error('Błąd Firebase:', e);
-      return {dict: {classes:[], teachers:[], rooms:[], subjects:[]}}; 
-    }
-  },
-  
-  async save(payload){ 
-    try {
-      // Zapisz tylko słowniki do Firebase
-      const database = firebase.database();
-      await database.ref('timetableData').set({
-        dict: payload.dict
-      });
-    } catch(error) {
-      console.error('Błąd zapisu do Firebase:', error);
-    }
+  // ---------- Firebase Configuration ----------
+  const firebaseConfig = {
+    apiKey: "AIzaSyBU5TsxSF_IsPhZb-fPqUaM_Lbcyn75-QU",
+    authDomain: "plan57.firebaseapp.com",
+    databaseURL: "https://plan57-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "plan57",
+    storageBucket: "plan57.firebasestorage.app",
+    messagingSenderId: "96724943053",
+    appId: "1:96724943053:web:cf607d1d0cf539953da984"
+  };
+
+  // Initialize Firebase
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
   }
-};
+  const database = firebase.database();
+
+  // ---------- Firebase Store ----------
+  const firebaseStore = {
+    async load() {
+      try {
+        showLoading(true);
+        const snapshot = await database.ref('timetableData').once('value');
+        const data = snapshot.val();
+        
+        if (!data) {
+          return {
+            dict: { classes: [], teachers: [], rooms: [], subjects: [] },
+            lessons: [],
+            absences: [],
+            substitutions: []
+          };
+        }
+        
+        return {
+          dict: data.dict || { classes: [], teachers: [], rooms: [], subjects: [] },
+          lessons: data.lessons || [],
+          absences: data.absences || [],
+          substitutions: data.substitutions || []
+        };
+      } catch (e) {
+        console.error('Błąd ładowania z Firebase:', e);
+        alert('Błąd połączenia z bazą danych. Sprawdź połączenie internetowe.');
+        return {
+          dict: { classes: [], teachers: [], rooms: [], subjects: [] },
+          lessons: [],
+          absences: [],
+          substitutions: []
+        };
+      } finally {
+        showLoading(false);
+      }
+    },
+    
+async save(payload) {
+  try {
+    showLoading(true);
+    
+    // PROSTE USUNIĘCIE UNDEFINED - DZIAŁA
+    const cleanedPayload = JSON.parse(JSON.stringify({
+      dict: payload.dict || { classes: [], teachers: [], rooms: [], subjects: [] },
+      lessons: payload.lessons || [],
+      absences: payload.absences || [],
+      substitutions: payload.substitutions || []
+    }));
+	 await database.ref('timetableData').set(cleanedPayload);
+      } catch (error) {
+    console.error('Błąd zapisu do Firebase:', error);
+    alert('Błąd zapisu do bazy danych: ' + error.message);
+  } finally {
+    showLoading(false);
+  }
+}
+  };
+
+  function showLoading(show) {
+    el('loading').style.display = show ? 'block' : 'none';
+  }
+
   let state = {
     lessons: [], // {id, day, period, subject, teacher, class, room, group?}
     absences: [], // {id, type: 'teacher'|'class', entity, date, reason, fromPeriod?, toPeriod?}
@@ -500,15 +510,15 @@ const store = {
     return new Date().toISOString().split('T')[0];
   }
 
-function getWeekStart(date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  // Poprawione - zawsze zwróć poniedziałek tego tygodnia
-  const diff = day === 0 ? -6 : 1 - day;
-  const result = new Date(d);
-  result.setDate(d.getDate() + diff);
-  return result.toISOString().split('T')[0];
-}
+  function getWeekStart(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    // Poprawione - zawsze zwróć poniedziałek tego tygodnia
+    const diff = day === 0 ? -6 : 1 - day;
+    const result = new Date(d);
+    result.setDate(d.getDate() + diff);
+    return result.toISOString().split('T')[0];
+  }
 
   function addWeeks(dateStr, weeks) {
     const date = new Date(dateStr);
@@ -564,21 +574,16 @@ function getWeekStart(date) {
   }
 
   // ---------- Inicjalizacja ----------
-// ---------- Inicjalizacja ----------
-async function init(){
-  const saved = await store.load();
-  state.lessons = saved.lessons;
-  state.absences = saved.absences || [];
-  state.substitutions = saved.substitutions || [];
-  Object.assign(dict, saved.dict);
-  
-  // Lekcje, nieobecności, zastępstwa z localStorage
-  const localData = localStore.load();
-  state.lessons = localData.lessons;
-  state.absences = localData.absences || [];
-  state.substitutions = localData.substitutions || [];
+  async function init(){
+    const saved = await firebaseStore.load();
+    
+    // Załaduj wszystkie dane z Firebase
+    state.lessons = saved.lessons || [];
+    state.absences = saved.absences || [];
+    state.substitutions = saved.substitutions || [];
+    Object.assign(dict, saved.dict);
+    
     state.currentWeek = getWeekStart(new Date());
-   
     
     setupTopBar();
     setupDictPanel();
@@ -642,21 +647,21 @@ async function init(){
     el('plan-dynamic').classList.toggle('active', state.planType === 'dynamic');
   }
 
-function setupWeekNavigation() {
-  el('prev-week').onclick = () => {
-    state.currentWeek = addWeeks(state.currentWeek, -1);
+  function setupWeekNavigation() {
+    el('prev-week').onclick = () => {
+      state.currentWeek = addWeeks(state.currentWeek, -1);
+      updateWeekInfo();
+      renderGrid();
+    };
+    
+    el('next-week').onclick = () => {
+      state.currentWeek = addWeeks(state.currentWeek, 1);
+      updateWeekInfo();
+      renderGrid();
+    };
+    
     updateWeekInfo();
-    renderGrid();
-  };
-  
-  el('next-week').onclick = () => {
-    state.currentWeek = addWeeks(state.currentWeek, 1);
-    updateWeekInfo();
-    renderGrid();
-  };
-  
-  updateWeekInfo();
-}
+  }
 
   function updateWeekInfo() {
     el('week-info').textContent = formatWeekRange(state.currentWeek);
@@ -694,13 +699,13 @@ function setupWeekNavigation() {
   // ---------- Panel słowników ----------
   function setupDictPanel(){
     const bind = (btnId, inputId, key, pillsId)=>{
-      el(btnId).onclick = ()=>{
+      el(btnId).onclick = async ()=>{
         const val = el(inputId).value.trim();
         if(!val) return;
         if(!dict[key].includes(val)){
           dict[key].push(val);
           el(inputId).value = '';
-          persist();
+          await persist();
           updateEntityOptions();
           renderPills();
           updateAbsenceSelects();
@@ -725,10 +730,10 @@ function setupWeekNavigation() {
         const p = document.createElement('span');
         p.className = 'pill';
         p.innerHTML = `${escapeHtml(name)} <button title="Usuń" aria-label="Usuń">×</button>`;
-        p.querySelector('button').onclick = ()=>{
+        p.querySelector('button').onclick = async ()=>{
           if(confirm(`Usunąć z listy: ${name}?`)){
             arr.splice(idx,1);
-            persist();
+            await persist();
             renderPills();
             updateEntityOptions();
             updateAbsenceSelects();
@@ -759,7 +764,7 @@ function setupWeekNavigation() {
     setupAbsenceDateSelectors();
 
     // Nieobecność nauczyciela
-    el('add-teacher-absence').onclick = () => {
+    el('add-teacher-absence').onclick = async () => {
       const teacher = el('absent-teacher').value;
       const fromPeriod = parseInt(el('absent-from-period').value);
       const toPeriod = parseInt(el('absent-to-period').value);
@@ -791,13 +796,13 @@ function setupWeekNavigation() {
       createSubstitutionsForTeacherAbsence(teacher, state.currentAbsenceDate, fromPeriod, toPeriod);
       
       el('absent-reason').value = '';
-      persist();
+      await persist();
       renderAbsenceLists();
       renderGrid();
     };
 
     // Nieobecność klasy
-    el('add-class-absence').onclick = () => {
+    el('add-class-absence').onclick = async () => {
       const className = el('absent-class').value;
       const fromPeriod = parseInt(el('absent-class-from-period').value);
       const toPeriod = parseInt(el('absent-class-to-period').value);
@@ -826,7 +831,7 @@ function setupWeekNavigation() {
       state.absences.push(absence);
       
       el('absent-class-reason').value = '';
-      persist();
+      await persist();
       renderAbsenceLists();
       renderGrid();
     };
@@ -960,10 +965,10 @@ function setupWeekNavigation() {
       const deleteBtn = document.createElement('button');
       deleteBtn.textContent = 'Usuń';
       deleteBtn.className = 'danger';
-      deleteBtn.onclick = () => {
+      deleteBtn.onclick = async () => {
         if(confirm('Usunąć nieobecność? Zastępstwa zostaną zachowane.')) {
           state.absences = state.absences.filter(a => a.id !== absence.id);
-          persist();
+          await persist();
           renderAbsenceLists();
           renderGrid();
         }
@@ -1012,10 +1017,10 @@ function setupWeekNavigation() {
       const deleteBtn = document.createElement('button');
       deleteBtn.textContent = 'Usuń';
       deleteBtn.className = 'danger';
-      deleteBtn.onclick = () => {
+      deleteBtn.onclick = async () => {
         if(confirm('Usunąć nieobecność klasy?')) {
           state.absences = state.absences.filter(a => a.id !== absence.id);
-          persist();
+          await persist();
           renderAbsenceLists();
           renderGrid();
         }
@@ -1089,10 +1094,10 @@ function setupWeekNavigation() {
       const deleteBtn = document.createElement('button');
       deleteBtn.textContent = 'Usuń';
       deleteBtn.className = 'danger';
-      deleteBtn.onclick = () => {
+      deleteBtn.onclick = async () => {
         if(confirm('Usunąć zastępstwo?')) {
           state.substitutions = state.substitutions.filter(s => s.id !== substitution.id);
-          persist();
+          await persist();
           renderAbsenceLists();
           renderGrid();
         }
@@ -1148,7 +1153,7 @@ function setupWeekNavigation() {
 
     dlg.showModal();
 
-    dlg.onclose = () => {
+    dlg.onclose = async () => {
       if(dlg.returnValue === 'save') {
         substitution.type = el('substitute-action').value;
         substitution.substituteTeacher = el('substitute-teacher').value || null;
@@ -1156,14 +1161,14 @@ function setupWeekNavigation() {
         substitution.substituteRoom = el('substitute-room').value || lesson.room;
         substitution.notes = el('substitute-notes').value.trim() || null;
         
-        persist();
+        await persist();
         renderAbsenceLists();
         renderGrid();
       }
     };
   }
 
-function getAvailableTeachers(day, period, excludeTeacher, date){
+  function getAvailableTeachers(day, period, excludeTeacher, date){
     // Znajdź wszystkich nauczycieli, którzy mają normalne lekcje w tym czasie
     const busyTeachers = state.lessons
       .filter(l => l.day === day && l.period === period)
@@ -1192,10 +1197,10 @@ function getAvailableTeachers(day, period, excludeTeacher, date){
       !allBusyTeachers.includes(teacher) &&
       !absentTeachers.includes(teacher)
     );
-}
+  }
 
   // ---------- Render siatki ----------
-function renderGrid(){
+  function renderGrid(){
     const grid = el('grid');
     grid.innerHTML = '';
     
@@ -1282,9 +1287,9 @@ function renderGrid(){
         });
         grid.appendChild(row);
     });
-}
+  }
 
-function renderLessonCard(lesson, day, period, currentDate){
+  function renderLessonCard(lesson, day, period, currentDate){
     const wrap = document.createElement('div');
     wrap.className = 'lesson';
 
@@ -1401,7 +1406,7 @@ function renderLessonCard(lesson, day, period, currentDate){
     });
 
     return wrap;
-}
+  }
 
   function getLessonStatus(lesson, day, period, date) {
     // Sprawdź nieobecność nauczyciela
@@ -1515,9 +1520,9 @@ function renderLessonCard(lesson, day, period, currentDate){
       el('fGroup').value = editing.group || '';
       el('btnDelete').style.display = '';
       // Poprawione: Ustawienie poprawnej funkcji dla przycisku USUŃ
-      el('btnDelete').onclick = () => {
+      el('btnDelete').onclick = async () => {
         if(confirm('Czy na pewno chcesz usunąć tę lekcję?')) {
-          deleteLesson(editing.id);
+          await deleteLesson(editing.id);
           dlg.close();
           renderGrid();
         }
@@ -1538,7 +1543,7 @@ function renderLessonCard(lesson, day, period, currentDate){
 
     dlg.showModal();
 
-    dlg.onclose = ()=>{
+    dlg.onclose = async ()=>{
       if(dlg.returnValue==='save'){
         const payload = {
           id: editing?.id || cryptoRandomId(),
@@ -1550,37 +1555,34 @@ function renderLessonCard(lesson, day, period, currentDate){
           room: el('fRoom').value,
           group: el('fGroup').value.trim() || undefined
         };
-        upsertLesson(payload);
+        await upsertLesson(payload);
         renderGrid();
       }
     };
   }
 
-  function upsertLesson(l){
+  async function upsertLesson(l){
     // tu zezwalamy na wiele lekcji w tej samej komórce (grupy) – brak kasowania kolizji
     const idx = state.lessons.findIndex(x=>x.id===l.id);
     if(idx>=0) state.lessons[idx]=l; else state.lessons.push(l);
-    persist();
+    await persist();
   }
 
-  function deleteLesson(id){
+  async function deleteLesson(id){
     state.lessons = state.lessons.filter(l=>l.id!==id);
     // Usuń również powiązane zastępstwa
     state.substitutions = state.substitutions.filter(s => s.lessonId !== id);
-    persist();
+    await persist();
   }
 
-function persist(){
-  // Słowniki do Firebase
-  store.save({ dict });
-  
-  // Lekcje, nieobecności, zastępstwa do localStorage
-  localStore.save({
-    lessons: state.lessons,
-    absences: state.absences,
-    substitutions: state.substitutions
-  });
-}
+  async function persist(){
+    await firebaseStore.save({
+      dict: dict,
+      lessons: state.lessons,
+      absences: state.absences,
+      substitutions: state.substitutions
+    });
+  }
 
   // ---------- Helpery ----------
   function fillSelect(sel, items){
