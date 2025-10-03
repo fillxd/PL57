@@ -172,10 +172,10 @@
 <body>
   <div class="wrap">
     <header>
-      <div class="title"> Plan </div>
+      <div class="title"> Plan zajęć dla Szkoły Podstawowej nr 57 we Wrocławiu </div>
       <div class="toolbar">
-        <button class="ghost" id="btn-dict" title="Zarządzanie słownikami">Dodaj</button>
-        <button class="warning" id="btn-absence" title="Zarządzanie nieobecnościami">Nieobecności</button>
+        <button class="ghost" id="btn-dict" title="Zarządzanie słownikami">Funkcje administratora</button>
+        <button class="warning" id="btn-absence" title="Zarządzanie nieobecnościami">Nieobecności i zastępstwa</button>
       </div>
     </header>
 
@@ -185,14 +185,14 @@
       <!-- Wybór typu planu -->
       <div class="plan-type-selector">
         <button class="plan-type-btn active" id="plan-fixed">Plan stały</button>
-        <button class="plan-type-btn" id="plan-dynamic">Plan ruchomy</button>
+        <button class="plan-type-btn" id="plan-dynamic">Plan aktualny</button>
       </div>
 
       <!-- Nawigacja tygodniowa (tylko dla planu ruchomego) -->
       <div class="week-navigation" id="week-nav" style="display:none;">
-        <button id="prev-week" class="ghost">‹ Poprzedni</button>
+        <button id="prev-week" class="ghost">‹ Poprzedni tydzień</button>
         <div class="week-info" id="week-info"></div>
-        <button id="next-week" class="ghost">Następny ›</button>
+        <button id="next-week" class="ghost">Następny tydzień ›</button>
       </div>
 
       <div class="row-flex">
@@ -205,15 +205,12 @@
         <button id="btn-open" class="primary">Pokaż plan</button>
       </div>
       <div class="legend" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px">
-        <div class="chip">Kliknij komórkę aby dodać lekcję</div>
-        <div class="chip">Kliknij kartę lekcji aby edytować</div>
-        <div class="chip">PN–PT, lekcje 0–9</div>
       </div>
     </div>
 
     <div class="panel" id="dict-panel">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-        <h3 style="margin:0;">Zarządzanie danymi</h3>
+        <h3 style="margin:0;">Zarządzanie danymi administracyjnymi</h3>
         <button class="ghost" id="btn-back">Powrót do planu</button>
       </div>
       <div class="dict-grid">
@@ -238,12 +235,12 @@
           <div id="pill-subjects"></div>
         </div>
       </div>
-      <div class="hint" style="margin-top:10px">Usuwanie pozycji słownika nie kasuje istniejących lekcji. Na razie brak edycji nazw w miejscu.</div>
+      <div class="hint" style="margin-top:10px">Usuwanie pozycji słownika nie kasuje istniejących lekcji.</div>
     </div>
 
     <div class="panel" id="absence-panel">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-        <h3 style="margin:0;">Zarządzanie nieobecnościami</h3>
+        <h3 style="margin:0;">Zarządzanie nieobecnościami i zastępstwami</h3>
         <button class="ghost" id="btn-back-absence">Powrót do planu</button>
       </div>
       
@@ -262,9 +259,9 @@
         
         <div class="four">
           <label>Nauczyciel<select id="absent-teacher"></select></label>
-          <label>Od lekcji<select id="absent-from-period"></select></label>
-          <label>Do lekcji<select id="absent-to-period"></select></label>
-          <label>Powód<input id="absent-reason" type="text" placeholder="np. choroba"/></label>
+          <label>Od<select id="absent-from-period"></select></label>
+          <label>Do<select id="absent-to-period"></select></label>
+          <label>Rodzaj nieobecności<input id="absent-reason" type="text" placeholder="np. choroba"/></label>
         </div>
         <button id="add-teacher-absence" class="primary" style="margin-top:10px;">Dodaj nieobecność</button>
         <div class="absence-list" id="teacher-absence-list"></div>
@@ -279,9 +276,9 @@
         
         <div class="four">
           <label>Klasa<select id="absent-class"></select></label>
-          <label>Od lekcji<select id="absent-class-from-period"></select></label>
-          <label>Do lekcji<select id="absent-class-to-period"></select></label>
-          <label>Powód<input id="absent-class-reason" type="text" placeholder="np. wycieczka"/></label>
+          <label>Od <select id="absent-class-from-period"></select></label>
+          <label>Do <select id="absent-class-to-period"></select></label>
+          <label>Rodzaj nieobecności<input id="absent-class-reason" type="text" placeholder="np. wycieczka"/></label>
         </div>
         <button id="add-class-absence" class="primary" style="margin-top:10px;">Dodaj nieobecność</button>
         <div class="absence-list" id="class-absence-list"></div>
@@ -365,9 +362,9 @@
         <div class="three">
           <label>Akcja
             <select id="substitute-action">
-              <option value="substitute">Zastępstwo</option>
+              <option value="substitute">Zastępstwo OP</option>
               <option value="cancel">Odwołaj lekcję</option>
-              <option value="subject-change">Zmiana przedmiotu</option>
+              <option value="subject-change">Zastępstwo</option>
             </select>
           </label>
           <label>Zastępca<select id="substitute-teacher"></select></label>
@@ -381,7 +378,7 @@
         
         <div class="hint">
           <strong>Zastępstwo:</strong> Inny nauczyciel prowadzi tę samą lekcję<br>
-          <strong>Odwołanie:</strong> Lekcja nie odbędzie się<br>
+          <strong>Odwołanie:</strong> Lekcja odwołana<br>
           <strong>Zmiana przedmiotu:</strong> Zastępca prowadzi inny przedmiot
         </div>
       </div>
@@ -1168,36 +1165,57 @@ async save(payload) {
     };
   }
 
-  function getAvailableTeachers(day, period, excludeTeacher, date){
-    // Znajdź wszystkich nauczycieli, którzy mają normalne lekcje w tym czasie
-    const busyTeachers = state.lessons
-      .filter(l => l.day === day && l.period === period)
-      .map(l => l.teacher);
-    
-    // Znajdź nauczycieli, którzy mają zastępstwa w tym czasie
-    const substitutionTeachers = state.substitutions
-      .filter(s => s.date === date && s.substituteTeacher)
-      .map(s => {
-        const lesson = state.lessons.find(l => l.id === s.lessonId);
-        return lesson && lesson.day === day && lesson.period === period ? s.substituteTeacher : null;
-      })
-      .filter(teacher => teacher !== null);
-    
-    // Sprawdź też nieobecności nauczycieli na ten dzień
-    const absentTeachers = state.absences
-      .filter(a => a.type === 'teacher' && a.date === date && 
-                   period >= a.fromPeriod && period <= a.toPeriod)
-      .map(a => a.entity);
-    
-    // Połącz listy zajętych nauczycieli (normalne lekcje + zastępstwa)
-    const allBusyTeachers = [...busyTeachers, ...substitutionTeachers];
-    
-    return dict.teachers.filter(teacher => 
-      teacher !== excludeTeacher && 
-      !allBusyTeachers.includes(teacher) &&
-      !absentTeachers.includes(teacher)
-    );
-  }
+function getAvailableTeachers(day, period, excludeTeacher, date){
+  // Znajdź wszystkich nauczycieli, którzy mają normalne lekcje w tym czasie
+  const busyTeachers = state.lessons
+    .filter(l => l.day === day && l.period === period)
+    .map(l => l.teacher);
+  
+  // Znajdź nauczycieli, którzy mają zastępstwa w tym czasie
+  const substitutionTeachers = state.substitutions
+    .filter(s => s.date === date && s.substituteTeacher)
+    .map(s => {
+      const lesson = state.lessons.find(l => l.id === s.lessonId);
+      return lesson && lesson.day === day && lesson.period === period ? s.substituteTeacher : null;
+    })
+    .filter(teacher => teacher !== null);
+  
+  // Sprawdź nieobecności nauczycieli na ten dzień
+  const absentTeachers = state.absences
+    .filter(a => a.type === 'teacher' && a.date === date && 
+                 period >= a.fromPeriod && period <= a.toPeriod)
+    .map(a => a.entity);
+  
+  // SPRAWDŹ NIEOBECNOŚCI KLAS - NAJWAŻNIEJSZA ZMIANA!
+  const lessonsCancelledDueToClassAbsence = state.lessons
+    .filter(lesson => {
+      // Sprawdź czy klasa z tej lekcji jest nieobecna
+      const classAbsent = state.absences.find(a => 
+        a.type === 'class' && 
+        a.entity === lesson.class && 
+        a.date === date &&
+        period >= a.fromPeriod && 
+        period <= a.toPeriod
+      );
+      return classAbsent && lesson.day === day && lesson.period === period;
+    });
+  
+  // Nauczyciele, którzy mają wolne z powodu nieobecności klasy
+  const teachersFreeDueToClassAbsence = lessonsCancelledDueToClassAbsence
+    .map(lesson => lesson.teacher)
+    .filter(teacher => teacher !== excludeTeacher);
+  
+  // Połącz listy zajętych nauczycieli (normalne lekcje + zastępstwa)
+  const allBusyTeachers = [...busyTeachers, ...substitutionTeachers];
+  
+  return dict.teachers.filter(teacher => 
+    teacher !== excludeTeacher && 
+    !allBusyTeachers.includes(teacher) &&
+    !absentTeachers.includes(teacher) ||
+    // DODAJ TEN WARUNEK - nauczyciel jest dostępny jeśli jego klasa jest nieobecna
+    teachersFreeDueToClassAbsence.includes(teacher)
+  );
+}
 
   // ---------- Render siatki ----------
   function renderGrid(){
