@@ -496,55 +496,90 @@ async save(payload) {
     entity: null,  // nazwa klasy, nauczyciela lub sali
     editingId: null,
     planType: 'fixed', // 'fixed' | 'dynamic'
-    currentWeek: getWeekStart(new Date()), // początek bieżącego tygodnia
+    currentWeek: null, // zostanie ustawione w init() // początek bieżącego tygodnia
     currentAbsenceDate: getTodayString(),
     currentClassAbsenceDate: getTodayString(),
     currentSubstitutionDate: getTodayString()
   };
 
   // ---------- Funkcje pomocnicze dla dat ----------
-  function getTodayString() {
-    return new Date().toISOString().split('T')[0];
-  }
+// ---------- NOWE Funkcje pomocnicze dla dat ----------
+function getTodayString() {
+  const today = new Date();
+  // Użyjmy lokalnego formatowania daty
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
-  function getWeekStart(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    // Poprawione - zawsze zwróć poniedziałek tego tygodnia
-    const diff = day === 0 ? -6 : 1 - day;
-    const result = new Date(d);
-    result.setDate(d.getDate() + diff);
-    return result.toISOString().split('T')[0];
+function getWeekStart(date) {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=niedziela, 1=poniedziałek, ..., 6=sobota
+  
+  console.log("Obliczanie tygodnia dla:", date, "dzień tygodnia:", day);
+  
+  // PROSTE PODEJŚCIE:
+  // - W sobotę i niedzielę pokazujemy następny tydzień
+  // - W poniedziałek-piątek pokazujemy bieżący tydzień
+  
+  if (day === 0 || day === 6) {
+    // Weekend - pokaż następny tydzień (od poniedziałku)
+    const daysUntilMonday = day === 0 ? 1 : 2;
+    d.setDate(d.getDate() + daysUntilMonday);
+  } else {
+    // Dzień roboczy - pokaż bieżący tydzień
+    // Ustaw na poniedziałek tego tygodnia
+    d.setDate(d.getDate() - (day - 1));
   }
+  
+  const result = formatDateForISO(d);
+  console.log("Wynik - początek tygodnia:", result);
+  return result;
+}
 
-  function addWeeks(dateStr, weeks) {
-    const date = new Date(dateStr);
-    date.setDate(date.getDate() + (weeks * 7));
-    return date.toISOString().split('T')[0];
+function getWeekDates(weekStart) {
+  const dates = [];
+  const start = new Date(weekStart);
+  
+  console.log("Generowanie dat tygodnia od:", weekStart);
+  
+  for(let i = 0; i < 5; i++) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + i);
+    dates.push(formatDateForISO(date));
+    console.log("Dzień", i + 1, ":", dates[i]);
   }
+  
+  return dates;
+}
 
-  function getWeekDates(weekStart) {
-    const dates = [];
-    const start = new Date(weekStart);
-    for(let i = 0; i < 5; i++) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + i);
-      dates.push(date.toISOString().split('T')[0]);
-    }
-    return dates;
-  }
+function formatDateForISO(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
-  function formatWeekRange(weekStart) {
-    const start = new Date(weekStart);
-    const end = new Date(weekStart);
-    end.setDate(start.getDate() + 4);
-    
-    const formatDate = (date) => {
-      return date.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    };
-    
-    return `${formatDate(start)} - ${formatDate(end)}`;
-  }
+function formatWeekRange(weekStart) {
+  const start = new Date(weekStart);
+  const end = new Date(weekStart);
+  end.setDate(start.getDate() + 4);
+  
+  console.log("Formatowanie zakresu:", weekStart, "do", formatDateForISO(end));
+  
+  const formatDate = (date) => {
+    return date.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' });
+  };
+  
+  return `${formatDate(start)} - ${formatDate(end)}`;
+}
+
+function addWeeks(dateStr, weeks) {
+  const date = new Date(dateStr);
+  date.setDate(date.getDate() + (weeks * 7));
+  return formatDateForISO(date);
+}
 
   function isInSchoolYear(date) {
     const d = new Date(date);
@@ -571,23 +606,46 @@ async save(payload) {
   }
 
   // ---------- Inicjalizacja ----------
-  async function init(){
-    const saved = await firebaseStore.load();
-    
-    // Załaduj wszystkie dane z Firebase
-    state.lessons = saved.lessons || [];
-    state.absences = saved.absences || [];
-    state.substitutions = saved.substitutions || [];
-    Object.assign(dict, saved.dict);
-    
-    state.currentWeek = getWeekStart(new Date());
-    
-    setupTopBar();
-    setupDictPanel();
-    setupAbsencePanel();
-    setupPlanTypeSelector();
-    setupWeekNavigation();
-    renderGrid();
+async function init(){
+  const saved = await firebaseStore.load();
+  state.lessons = saved.lessons || [];
+  state.absences = saved.absences || [];
+  state.substitutions = saved.substitutions || [];
+  Object.assign(dict, saved.dict);
+
+  // DEBUG: Kompletne info o dacie
+  const today = new Date();
+  const todayString = getTodayString();
+  console.log("=== DEBUG DAT ===");
+  console.log("Dzisiaj (new Date()):", today);
+  console.log("Dzisiaj (ISO):", todayString);
+  console.log("Dzień tygodnia:", today.getDay(), "(0=niedz, 1=pon, 6=sob)");
+  console.log("Data lokalnie:", today.toLocaleDateString('pl-PL'));
+  
+  let weekStart = getWeekStart(todayString);
+  
+  // Upewnij się, że tydzień nie jest wcześniejszy niż 1.09.2025
+  const minDate = new Date('2025-09-01');
+  const weekStartDate = new Date(weekStart);
+  
+  if (weekStartDate < minDate) {
+    console.log("Koryguję datę na minimalną: 2025-09-01");
+    weekStart = '2025-09-01';
+  }
+  
+  state.currentWeek = weekStart;
+  console.log("OSTATECZNY tydzień:", state.currentWeek);
+  
+  // Sprawdźmy jakie daty będą wyświetlane
+  const weekDates = getWeekDates(state.currentWeek);
+  console.log("Tydzień będzie pokazywał daty:", weekDates);
+
+  setupTopBar();
+  setupDictPanel();
+  setupAbsencePanel();
+  setupPlanTypeSelector();
+  setupWeekNavigation();
+  renderGrid();
     
     // Obsługa przełączania między widokami
     el('btn-dict').onclick = () => {
@@ -644,21 +702,41 @@ async save(payload) {
     el('plan-dynamic').classList.toggle('active', state.planType === 'dynamic');
   }
 
-  function setupWeekNavigation() {
-    el('prev-week').onclick = () => {
-      state.currentWeek = addWeeks(state.currentWeek, -1);
+function setupWeekNavigation() {
+  el('prev-week').onclick = () => {
+    const newWeek = addWeeks(state.currentWeek, -1);
+    
+    console.log("Nawigacja: Poprzedni tydzień");
+    console.log("Obecny:", state.currentWeek);
+    console.log("Nowy:", newWeek);
+    
+    // Sprawdź czy nowy tydzień nie jest wcześniejszy niż 1.09.2025
+    const minDate = new Date('2025-09-01');
+    const newWeekDate = new Date(newWeek);
+    
+    if (newWeekDate >= minDate) {
+      state.currentWeek = newWeek;
       updateWeekInfo();
       renderGrid();
-    };
+    } else {
+      alert('Nie można cofnąć się przed 1 września 2025');
+    }
+  };
+  
+  el('next-week').onclick = () => {
+    const newWeek = addWeeks(state.currentWeek, 1);
     
-    el('next-week').onclick = () => {
-      state.currentWeek = addWeeks(state.currentWeek, 1);
-      updateWeekInfo();
-      renderGrid();
-    };
+    console.log("Nawigacja: Następny tydzień");
+    console.log("Obecny:", state.currentWeek);
+    console.log("Nowy:", newWeek);
     
+    state.currentWeek = newWeek;
     updateWeekInfo();
-  }
+    renderGrid();
+  };
+  
+  updateWeekInfo();
+}
 
   function updateWeekInfo() {
     el('week-info').textContent = formatWeekRange(state.currentWeek);
@@ -1218,12 +1296,18 @@ function getAvailableTeachers(day, period, excludeTeacher, date){
 }
 
   // ---------- Render siatki ----------
-  function renderGrid(){
-    const grid = el('grid');
-    grid.innerHTML = '';
-    
-    // Pobierz daty tygodnia dla planu ruchomego
-    const weekDates = state.planType === 'dynamic' ? getWeekDates(state.currentWeek) : null;
+function renderGrid(){
+  const grid = el('grid');
+  grid.innerHTML = '';
+  
+  // Pobierz daty tygodnia dla planu ruchomego
+  const weekDates = state.planType === 'dynamic' ? getWeekDates(state.currentWeek) : null;
+  
+  // DEBUG: Sprawdźmy jakie daty są obliczane
+  if (weekDates) {
+    console.log("Obliczone daty tygodnia:", weekDates);
+    console.log("Początek tygodnia:", state.currentWeek);
+  }
     
     PERIODS.forEach(period =>{
         const row = document.createElement('div');
