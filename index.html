@@ -738,6 +738,17 @@ function setupWeekNavigation() {
   updateWeekInfo();
 }
 
+function hasSubstitutionWithRoom(lesson, room, date) {
+    if (!date) return false;
+    
+    const substitution = state.substitutions.find(s => 
+        s.lessonId === lesson.id && s.date === date
+    );
+    
+    // Pokazuj lekcję w nowej sali jeśli zastępstwo ma zmienioną salę
+    return substitution && substitution.substituteRoom === room;
+}
+
   function updateWeekInfo() {
     el('week-info').textContent = formatWeekRange(state.currentWeek);
   }
@@ -1199,15 +1210,21 @@ function setupWeekNavigation() {
       ${DAYS[lesson.day]} lekcja ${lesson.period}, sala ${escapeHtml(lesson.room)}
     `;
 
-    // Wypełnij dostępnych nauczycieli (tylko wolnych w tym czasie)
-    const availableTeachers = getAvailableTeachers(lesson.day, lesson.period, lesson.teacher, substitution.date);
-    fillSelect(el('substitute-teacher'), [
-      {v: '', l: 'Wybierz zastępcę'},
-      ...availableTeachers.map(t => ({v: t, l: t}))
-    ]);
-    
-    fillSelect(el('substitute-subject'), dict.subjects.map(s => ({v: s, l: s})));
-    fillSelect(el('substitute-room'), dict.rooms.map(r => ({v: r, l: r})));
+// Wypełnij dostępnych nauczycieli (tylko wolnych w tym czasie)
+const availableTeachers = getAvailableTeachers(lesson.day, lesson.period, lesson.teacher, substitution.date);
+fillSelect(el('substitute-teacher'), [
+    {v: '', l: 'Wybierz zastępcę'},
+    ...availableTeachers.map(t => ({v: t, l: t}))
+]);
+
+fillSelect(el('substitute-subject'), dict.subjects.map(s => ({v: s, l: s})));
+
+// Pobierz dostępne sale
+const availableRooms = getAvailableRooms(lesson.day, lesson.period, substitution.date, lesson);
+fillSelect(el('substitute-room'), [
+    {v: lesson.room, l: `${lesson.room} (oryginalna)`},
+    ...availableRooms.map(r => ({v: r, l: r}))
+]);
 
     // Ustaw obecne wartości
     el('substitute-action').value = substitution.type;
@@ -1242,6 +1259,55 @@ function setupWeekNavigation() {
       }
     };
   }
+
+function getAvailableRooms(day, period, date, originalLesson = null) {
+    // Znajdź zajęte sale (normalne lekcje)
+    const busyRooms = state.lessons
+        .filter(l => l.day === day && l.period === period)
+        .map(l => l.room);
+
+    // Znajdź sale zajęte przez zastępstwa
+    const substitutionRooms = state.substitutions
+        .filter(s => s.date === date && s.substituteRoom)
+        .map(s => {
+            const lesson = state.lessons.find(l => l.id === s.lessonId);
+            return lesson && lesson.day === day && lesson.period === period ? s.substituteRoom : null;
+        })
+        .filter(room => room !== null);
+
+    // Sprawdź nieobecności klas - jeśli klasa jest nieobecna, jej sala jest wolna
+    const lessonsCancelledDueToClassAbsence = state.lessons
+        .filter(lesson => {
+            const classAbsent = state.absences.find(a => 
+                a.type === 'class' && 
+                a.entity === lesson.class && 
+                a.date === date &&
+                period >= a.fromPeriod && 
+                period <= a.toPeriod
+            );
+            return classAbsent && lesson.day === day && lesson.period === period;
+        });
+
+    // Sale, które są wolne z powodu nieobecności klasy
+    const roomsFreeDueToClassAbsence = lessonsCancelledDueToClassAbsence
+        .map(lesson => lesson.room)
+        .filter(room => busyRooms.includes(room)); // Tylko te, które normalnie byłyby zajęte
+
+    // Połącz listy zajętych sal (normalne lekcje + zastępstwa)
+    let allBusyRooms = [...busyRooms, ...substitutionRooms];
+    
+    // JEŚLI TO ZASTĘPSTWO - oryginalna sala staje się dostępna
+    if (originalLesson) {
+        allBusyRooms = allBusyRooms.filter(room => room !== originalLesson.room);
+    }
+    
+    // Zwróć wolne sale (usuń z listy wszystkich sal te zajęte)
+    return dict.rooms.filter(room => 
+        !allBusyRooms.includes(room) ||
+        // ALBO sala jest wolna z powodu nieobecności klasy
+        roomsFreeDueToClassAbsence.includes(room)
+    );
+}
 
 function getAvailableTeachers(day, period, excludeTeacher, date){
   // Znajdź wszystkich nauczycieli, którzy mają normalne lekcje w tym czasie
@@ -1349,13 +1415,17 @@ function renderGrid(){
                     
                     items = [...normalLessons, ...substitutionLessons];
                 } 
-                // Dla klasy i sali - standardowe filtrowanie
-                else {
-                    items = state.lessons.filter(l => l.day===dIdx && l.period===period && (
-                        state.mode==='class' ? l.class===state.entity : 
-                        l.room===state.entity
-                    ));
-                }
+// Dla klasy i sali - standardowe filtrowanie
+else {
+    items = state.lessons.filter(l => l.day===dIdx && l.period===period && (
+        state.mode==='class' ? l.class===state.entity : 
+        // Dla sali: POKAŻ lekcję TYLKO jeśli:
+        // 1. To jej oryginalna sala I nie ma zastępstwa zmieniającego salę
+        // 2. LUB to zastępstwo z tą salą jako nową salą
+        (l.room===state.entity && !hasSubstitutionWithDifferentRoom(l, currentDate)) ||
+        hasSubstitutionWithRoom(l, state.entity, currentDate)
+    ));
+}
             } 
             // Dla planu stałego - standardowe filtrowanie
             else {
@@ -1389,7 +1459,18 @@ function renderGrid(){
         });
         grid.appendChild(row);
     });
-  }
+  }	
+  
+  function hasSubstitutionWithDifferentRoom(lesson, date) {
+    if (!date) return false;
+    
+    const substitution = state.substitutions.find(s => 
+        s.lessonId === lesson.id && s.date === date
+    );
+    
+    // Zwróć true jeśli zastępstwo istnieje i zmienia salę
+    return substitution && substitution.substituteRoom && substitution.substituteRoom !== lesson.room;
+}
 
   function renderLessonCard(lesson, day, period, currentDate){
     const wrap = document.createElement('div');
@@ -1416,12 +1497,18 @@ function renderGrid(){
     if(state.planType === 'dynamic' && currentDate) {
         const substitution = state.substitutions.find(s => s.lessonId === lesson.id && s.date === currentDate);
         
-        // Jeśli to lekcja oznaczona jako zastępstwo
-        if(lesson.isSubstitution) {
-            displayTeacher = state.entity; // Nauczyciel B
-            substitutionInfo = `Zastępstwo za: ${lesson.teacher}`;
-            wrap.classList.add('substitute');
-        }
+      // Jeśli to lekcja oznaczona jako zastępstwo
+if(lesson.isSubstitution) {
+    displayTeacher = state.entity; // Nauczyciel B
+    substitutionInfo = `Zastępstwo za: ${lesson.teacher}`;
+    wrap.classList.add('substitute');
+    
+    // DODAJ TEN FRAGMENT - jeśli sala się zmieniła
+    if(state.mode === 'room' && lesson.room !== state.entity) {
+        wrap.style.opacity = '0.7';
+        wrap.style.background = 'rgba(255,255,255,0.1)';
+    }
+}
         else if(substitution) {
             if(substitution.type === 'substitute' && substitution.substituteTeacher) {
                 if(state.mode === 'teacher' && lesson.teacher === state.entity) {
@@ -1464,11 +1551,17 @@ function renderGrid(){
         }
     }
     
-    if(state.mode === 'room') {
-        meta.textContent = lessonStatus.message || '';
-    } else {
-        meta.textContent = `Sala ${roomText}${lessonStatus.message ? ` · ${lessonStatus.message}` : ''}`;
+if(state.mode === 'room') {
+    let metaText = lessonStatus.message || '';
+    // Jeśli to zastępstwo z zmianą sali, pokaż informację
+    if(lesson.isSubstitution && lesson.room !== state.entity) {
+        if(metaText) metaText += ' · ';
+        metaText += `Przeniesione z sali ${lesson.room}`;
     }
+    meta.textContent = metaText;
+} else {
+    meta.textContent = `Sala ${roomText}${lessonStatus.message ? ` · ${lessonStatus.message}` : ''}`;
+}
 
     // Dodaj informację o zastępstwie
     if(substitutionInfo) {
